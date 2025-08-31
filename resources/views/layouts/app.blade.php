@@ -8,7 +8,7 @@
     <title>{{ config('app.name', 'Ovievent') }}</title>
 
     @php
-        $siteName   = config('app.name', 'ovievent');
+        $siteName   = config('app.name', 'eventib');
         $defaultImg = asset('images/og-default.jpg');  /* keep a 1200x630 image here */
     @endphp
 

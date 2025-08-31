@@ -43,7 +43,7 @@ class RegistrantsController extends Controller
         $sumMinor = $event->registrations->sum(function ($r) {
             return (int) round(((float) ($r->amount ?? 0)) * 100);
         });
-        $commissionMinor = (int) round($sumMinor * 0.20);
+        $commissionMinor = (int) round($sumMinor * 0.099); // 9.99% commission
         $payoutMinor     = max(0, $sumMinor - $commissionMinor);
 
         $hasProcessingPayout = EventPayout::where('event_id', $event->id)

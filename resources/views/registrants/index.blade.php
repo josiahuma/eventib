@@ -79,9 +79,9 @@
                     <div>
                         <div class="text-sm text-gray-500">Actions</div>
                         <div class="mt-1 text-xs text-gray-500">
-                            Available payout:
+                            Available payout (After 9.99% processing fee deduction):
                             <span class="font-medium text-gray-900">
-                                {{ $symbol }}{{ number_format($payoutMinor/100, 2) }} <span class="text-xs text-gray-500">{{ $currency }}</span>
+                                {{ $symbol }}{{ number_format($payoutMinor/100, 2) }} <span class="text-xs text-gray-500">{{ $currency }}"</span>
                             </span>
                         </div>
                     </div>

@@ -20,7 +20,7 @@
                 @csrf
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">Amount (after commission)</label>
+                    <label class="block text-sm font-medium text-gray-700">Amount (after 9.9% transaction & processing fee)</label>
                     <input type="text" value="£{{ number_format($amount/100,2) }} {{ $currency }}"
                            class="mt-1 w-full rounded-lg border-gray-300 bg-gray-100 text-gray-700" disabled>
                     <input type="hidden" name="amount" value="{{ $amount }}">

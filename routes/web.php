@@ -123,7 +123,9 @@ Route::get('/events/{event}/register/result', [RegistrationController::class, 'r
     ->name('events.register.result');
 
 // Sitemap
+Route::get('/sitemap', [SitemapController::class, 'index']);
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');
+
 
 // PUBLIC show route — put AFTER resource routes so it doesn't catch /events/create
 // Also guard against the reserved word "create" just in case.

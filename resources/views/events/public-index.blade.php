@@ -7,9 +7,9 @@
             <h2 class="font-semibold text-2xl text-gray-800 leading-tight">
                 Discover Events
             </h2>
-            <div class="text-sm text-gray-500">
+            <!--<div class="text-sm text-gray-500">
                 {{ $totalCount }} {{ \Illuminate\Support\Str::plural('event', $totalCount) }}
-            </div>
+            </div>-->
         </div>
     </x-slot>
 
@@ -151,7 +151,7 @@
             <section class="mb-10">
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-xl font-semibold text-gray-900">Featured</h3>
-                    <span class="text-sm text-gray-500">{{ $featured->total() }}</span>
+                    <!--<span class="text-sm text-gray-500">{{ $featured->total() }}</span>--> {{-- total count not relevant for featured --}}
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -171,7 +171,7 @@
             <section class="mb-10">
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-xl font-semibold text-gray-900">Upcoming</h3>
-                    <span class="text-sm text-gray-500">{{ $upcoming->total() }}</span>
+                    <!--<span class="text-sm text-gray-500">{{ $upcoming->total() }}</span>--> {{-- total count not relevant for upcoming --}}
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -191,7 +191,7 @@
             <section>
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-xl font-semibold text-gray-900">Past events</h3>
-                    <span class="text-sm text-gray-500">{{ $past->total() }}</span>
+                    <!--<span class="text-sm text-gray-500">{{ $past->total() }}</span>--> {{-- total count not relevant for past --}}
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

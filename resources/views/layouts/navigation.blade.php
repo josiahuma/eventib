@@ -49,6 +49,7 @@
                         </x-slot>
                         <x-slot name="content">
                             <x-dropdown-link :href="route('profile.edit')">Profile</x-dropdown-link>
+                            <x-dropdown-link :href="route('profile.payouts')">Add Payout methods</x-dropdown-link>
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
                                 <x-dropdown-link :href="route('logout')"
@@ -111,6 +112,7 @@
                 </div>
                 <div class="mt-3 space-y-1">
                     <x-responsive-nav-link :href="route('profile.edit')">Profile</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('profile.payouts')">Add Payout methods</x-responsive-nav-link>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <x-responsive-nav-link :href="route('logout')"

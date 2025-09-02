@@ -51,4 +51,7 @@ class User extends Authenticatable
         return $this->hasMany(\App\Models\SocialAccount::class);
     }
 
+    public function payoutMethods() { return $this->hasMany(\App\Models\UserPayoutMethod::class); }
+
+
 }

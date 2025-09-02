@@ -7,7 +7,6 @@ use App\Models\EventUnlock;
 use App\Models\EventPayout;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Stripe\StripeClient;
 
 class RegistrantsController extends Controller
 {
@@ -39,20 +38,34 @@ class RegistrantsController extends Controller
             'registrations.sessions' => fn($q) => $q->orderBy('session_date'),
         ]);
 
-        // sums (minor units)
+        // Gross (minor units)
         $sumMinor = $event->registrations->sum(function ($r) {
             return (int) round(((float) ($r->amount ?? 0)) * 100);
         });
-        $commissionMinor = (int) round($sumMinor * 0.099); // 9.99% commission
-        $payoutMinor     = max(0, $sumMinor - $commissionMinor);
 
+        // 9.99% commission
+        $commissionMinor = intdiv($sumMinor * 999, 10000);
+
+        // Net currently earned
+        $payoutMinor = max(0, $sumMinor - $commissionMinor);
+
+        // Subtract all payouts that are not failed/cancelled
+        $deductedMinor = (int) EventPayout::where('event_id', $event->id)
+            ->where('user_id', Auth::id())
+            ->whereNotIn('status', ['failed', 'cancelled'])
+            ->sum('amount');
+
+        // What can be requested right now
+        $availableMinor = max(0, $payoutMinor - $deductedMinor);
+
+        // We still show a “Processing” chip for context
         $hasProcessingPayout = EventPayout::where('event_id', $event->id)
             ->where('user_id', Auth::id())
             ->where('status', 'processing')
             ->exists();
 
         $currency = strtoupper($event->ticket_currency ?? 'GBP');
-        $symbols  = ['GBP'=>'£','USD'=>'$','EUR'=>'€','NGN'=>'₦','KES'=>'KSh','GHS'=>'₵','ZAR'=>'R'];
+        $symbols  = ['GBP'=>'£','USD'=>'$','EUR'=>'€','NGN'=>'₦','KES'=>'KSh','GHS'=>'₵','ZAR'=>'R','CAD'=>'$','AUD'=>'$'];
         $symbol   = $symbols[$currency] ?? ($currency.' ');
 
         return view('registrants.index', [
@@ -61,11 +74,13 @@ class RegistrantsController extends Controller
             'sumMinor'            => $sumMinor,
             'commissionMinor'     => $commissionMinor,
             'payoutMinor'         => $payoutMinor,
+            'availableMinor'      => $availableMinor,
             'currency'            => $currency,
             'symbol'              => $symbol,
             'hasProcessingPayout' => $hasProcessingPayout,
         ]);
     }
+
     public function unlock(Event $event)
     {
         abort_unless($event->user_id === Auth::id(), 403);
@@ -96,7 +111,7 @@ class RegistrantsController extends Controller
             return redirect()->route('events.registrants', $event);
         }
 
-        $stripe = new StripeClient(config('services.stripe.secret'));
+        $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
 
         $session = $stripe->checkout->sessions->create([
             'mode' => 'payment',
@@ -142,7 +157,7 @@ class RegistrantsController extends Controller
             return redirect()->route('events.registrants.unlock', $event)->with('error', 'Missing session id.');
         }
 
-        $stripe  = new StripeClient(config('services.stripe.secret'));
+        $stripe  = new \Stripe\StripeClient(config('services.stripe.secret'));
         $session = $stripe->checkout->sessions->retrieve($sessionId, []);
 
         if (!$session || $session->payment_status !== 'paid') {
@@ -167,19 +182,14 @@ class RegistrantsController extends Controller
         return redirect()->route('events.registrants', $event)->with('success', 'Registrants unlocked.');
     }
 
-    /**
-     * Normalize currency code to 3-letter lowercase (defaults to gbp).
-     */
+    /** Normalize currency code to 3-letter lowercase (defaults to gbp). */
     private function normalizeCurrency(?string $code): string
     {
         $c = strtolower(trim((string) $code));
         return preg_match('/^[a-z]{3}$/', $c) ? $c : 'gbp';
     }
 
-    /**
-     * Number of decimal places for a currency (Stripe minor unit exponent).
-     * 0-decimal and 3-decimal currencies handled; default 2.
-     */
+    /** Number of decimal places for a currency (Stripe minor unit exponent). */
     private function currencyExponent(string $currency): int
     {
         $c = strtolower($currency);

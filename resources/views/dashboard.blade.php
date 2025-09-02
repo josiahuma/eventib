@@ -193,29 +193,53 @@
                                     </a>
                                 @endif
                                 
-                                {{-- Delete button with confirmation --}}
-                                <div x-data="{ open: false }" class="relative">
-                                    <button @click="open = true"
-                                            class="inline-flex items-center px-3 py-1.5 text-sm rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700">
-                                        Delete
-                                    </button>
+                                {{-- Delete button with confirmation modal --}}
+                                <div x-data="{ open: false }">
+                                <button @click="open = true"
+                                        class="inline-flex items-center px-3 py-1.5 text-sm rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700">
+                                    Delete
+                                </button>
 
-                                    <div x-show="open" @click.outside="open=false" x-cloak
-                                         class="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-10">
-                                        <p class="text-sm text-gray-700">Delete this event? This action cannot be undone.</p>
-                                        <div class="mt-3 flex items-center justify-end gap-2">
-                                            <button @click="open=false" class="text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+                                <!-- Move the modal to <body> so overflow on cards never clips it -->
+                                <template x-teleport="body">
+                                    <div x-show="open" x-transition.opacity x-trap.noscroll="open"
+                                        class="fixed inset-0 z-50">
+                                    <!-- Backdrop -->
+                                    <div class="absolute inset-0 bg-black/40" @click="open = false" aria-hidden="true"></div>
+
+                                    <!-- Modal -->
+                                    <div class="absolute inset-0 flex items-center justify-center p-4">
+                                        <div class="w-full max-w-md rounded-xl bg-white shadow-xl p-6"
+                                            role="dialog" aria-modal="true" aria-labelledby="delTitle">
+                                        <h3 id="delTitle" class="text-base font-semibold text-gray-900">
+                                            Delete this event?
+                                        </h3>
+                                        <p class="mt-2 text-sm text-gray-600">
+                                            This action cannot be undone.
+                                        </p>
+
+                                        <div class="mt-6 flex justify-end gap-3">
+                                            <button type="button"
+                                                    @click="open = false"
+                                                    class="px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
+                                            Cancel
+                                            </button>
+
                                             <form method="POST" action="{{ route('events.destroy', $event) }}">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit"
-                                                        class="inline-flex items-center px-3 py-1.5 text-sm rounded-md bg-rose-600 hover:bg-rose-700 text-white">
-                                                    Yes, delete
-                                                </button>
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit"
+                                                    class="px-3 py-1.5 text-sm rounded-md bg-rose-600 text-white hover:bg-rose-700">
+                                                Yes, delete
+                                            </button>
                                             </form>
                                         </div>
+                                        </div>
                                     </div>
+                                    </div>
+                                </template>
                                 </div>
+
                             </div>
 
                         </div>

@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\EventCreatedMail;
+use Illuminate\Validation\Rule;
+use App\Models\UserPayoutMethod;
 
 class EventController extends Controller
 {
@@ -129,30 +131,77 @@ class EventController extends Controller
     // Show event creation form
     public function create()
     {
-        return view('events.create');
+         $payouts = auth()->user()
+            ? auth()->user()->payoutMethods()->get()->groupBy('country')
+            : collect();
+
+        return view('events.create', [
+            'payoutsByCountry' => $payouts->toArray(),
+        ]);
     }
 
     // Store event in database
     public function store(Request $request)
     {
+        // Primary validation (now includes payout_method_id rule)
         $validated = $request->validate([
-            'name'         => 'required|string|max:255',
-            'organizer'    => 'nullable|string|max:255',
-            'category'     => 'nullable|string|max:100',
-            'tags'         => 'nullable|array',
-            'tags.*'       => 'string|max:50',
-            'location'     => 'nullable|string|max:255',
-            'description'  => 'nullable|string',
-            'ticket_cost'     => 'nullable|numeric|min:0|max:99999999.99',
-            'ticket_currency' => 'required|string|in:GBP,USD,EUR,NGN,KES,GHS,ZAR,CAD,AUD|size:3',
-            'avatar'       => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-            'banner'       => 'required|image|mimes:jpg,jpeg,png|max:4096',
-            'is_promoted'  => 'nullable|boolean',
+            'name'            => 'required|string|max:255',
+            'organizer'       => 'nullable|string|max:255',
+            'category'        => 'nullable|string|max:100',
+            'tags'            => 'nullable|array',
+            'tags.*'          => 'string|max:50',
+            'location'        => 'nullable|string|max:255',
+            'description'     => 'nullable|string',
+
+            // currencies restricted to the ones you surfaced in the UI
+            'ticket_cost'        => 'nullable|numeric|min:0|max:99999999.99',
+            'ticket_currency'    => 'required|string|in:GBP,USD,CAD,AUD,INR,NGN,KES,GHS|size:3',
+
+            'avatar'          => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'banner'          => 'required|image|mimes:jpg,jpeg,png|max:4096',
+            'is_promoted'     => 'nullable|boolean',
+
             'sessions.*.name' => 'required|string|max:255',
             'sessions.*.date' => 'required|date',
             'sessions.*.time' => 'required',
+
+            // payout method must be present for paid events and belong to the user
+            'payout_method_id'  => [
+                Rule::requiredIf(fn () => (float)$request->input('ticket_cost', 0) > 0),
+                'nullable',
+                'integer',
+                Rule::exists('user_payout_methods', 'id')
+                    ->where(fn ($q) => $q->where('user_id', Auth::id())),
+            ],
         ]);
 
+        $isPaid = (float)($validated['ticket_cost'] ?? 0) > 0;
+
+        // Extra guard: if a bank method is selected, its country must match the currency's country
+        if ($isPaid && !empty($validated['payout_method_id'])) {
+            $pm = UserPayoutMethod::where('id', $validated['payout_method_id'])
+                    ->where('user_id', Auth::id())
+                    ->first();
+
+            if ($pm) {
+                $map = [
+                    'GBP' => 'GB', 'USD' => 'US', 'CAD' => 'CA', 'AUD' => 'AU',
+                    'INR' => 'IN', 'NGN' => 'NG', 'KES' => 'KE', 'GHS' => 'GH',
+                ];
+                $expectedCountry = $map[strtoupper($validated['ticket_currency'])] ?? 'GB';
+
+                if ($pm->type === 'bank' && strtoupper((string)$pm->country) !== $expectedCountry) {
+                    return back()
+                        ->withErrors([
+                            'payout_method_id' => "Selected payout method is for {$pm->country}, "
+                                . "but the chosen currency requires {$expectedCountry}."
+                        ])
+                        ->withInput();
+                }
+            }
+        }
+
+        // Files
         $avatarUrl = $request->hasFile('avatar')
             ? $request->file('avatar')->store('avatars', 'public')
             : null;
@@ -161,23 +210,29 @@ class EventController extends Controller
             ? $request->file('banner')->store('banners', 'public')
             : null;
 
+        // Tags
         $tagsArray = isset($validated['tags']) && is_array($validated['tags']) ? $validated['tags'] : [];
 
+        // Create event
         $event = Event::create([
-            'user_id'     => Auth::id(),
-            'name'        => $validated['name'],
-            'organizer'   => $validated['organizer'] ?? null,
-            'category'    => $validated['category'] ?? null,
-            'tags'        => json_encode($tagsArray),
-            'location'    => $validated['location'] ?? null,
-            'description' => $validated['description'] ?? null,
-            'ticket_cost' => $validated['ticket_cost'] ?? 0,
-            'ticket_currency' => strtoupper($validated['ticket_currency']),
-            'avatar_url'  => $avatarUrl,
-            'banner_url'  => $bannerUrl,
-            'is_promoted' => $validated['is_promoted'] ?? false,
+            'user_id'          => Auth::id(),
+            'name'             => $validated['name'],
+            'organizer'        => $validated['organizer'] ?? null,
+            'category'         => $validated['category'] ?? null,
+            'tags'             => json_encode($tagsArray), // OK with your current setup; you can pass the array if you prefer.
+            'location'         => $validated['location'] ?? null,
+            'description'      => $validated['description'] ?? null,
+
+            'ticket_cost'      => $isPaid ? $validated['ticket_cost'] : 0,
+            'ticket_currency'  => strtoupper($validated['ticket_currency']),
+            'payout_method_id' => $isPaid ? ($validated['payout_method_id'] ?? null) : null,
+
+            'avatar_url'       => $avatarUrl,
+            'banner_url'       => $bannerUrl,
+            'is_promoted'      => $validated['is_promoted'] ?? false,
         ]);
 
+        // Sessions
         if ($request->has('sessions')) {
             foreach ($request->sessions as $session) {
                 $event->sessions()->create([
@@ -187,6 +242,7 @@ class EventController extends Controller
             }
         }
 
+        // Email
         Mail::to(auth()->user()->email)->send(new EventCreatedMail($event));
 
         return redirect()->route('dashboard')->with('success', 'Event created successfully!');
@@ -216,7 +272,10 @@ class EventController extends Controller
     public function edit(Event $event)
     {
         abort_if($event->user_id !== Auth::id(), 403);
-        return view('events.edit', compact('event'));
+        $payouts = auth()->user()->payoutMethods()->get()->groupBy('country');
+        return view('events.edit', compact('event') + [
+            'payoutsByCountry' => $payouts->toArray(),
+        ]);
     }
 
     public function update(Request $request, Event $event)
@@ -231,13 +290,52 @@ class EventController extends Controller
             'tags.*'      => 'string|max:50',
             'location'    => 'nullable|string|max:255',
             'description' => 'nullable|string',
-            'ticket_cost'     => 'nullable|numeric|min:0|max:99999999.99',
-            'ticket_currency' => 'required|string|in:GBP,USD,EUR,NGN,KES,GHS,ZAR,CAD,AUD|size:3',
+
+            // Only the currencies you expose in the UI
+            'ticket_cost'        => 'nullable|numeric|min:0|max:99999999.99',
+            'ticket_currency'    => 'required|string|in:GBP,USD,CAD,AUD,INR,NGN,KES,GHS|size:3',
+
+            // Files remain optional on update
             'avatar'      => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             'banner'      => 'nullable|image|mimes:jpg,jpeg,png|max:4096',
+
+            // Require a payout method iff this is a paid event; must belong to the user
+            'payout_method_id'   => [
+                Rule::requiredIf(fn () => (float)$request->input('ticket_cost', 0) > 0),
+                'nullable',
+                'integer',
+                Rule::exists('user_payout_methods', 'id')
+                    ->where(fn ($q) => $q->where('user_id', Auth::id())),
+            ],
         ]);
 
-        // Avatar
+        $isPaid = (float)($validated['ticket_cost'] ?? 0) > 0;
+
+        // Guard: if bank method selected, its country must match currency’s country
+        if ($isPaid && !empty($validated['payout_method_id'])) {
+            $pm = UserPayoutMethod::where('id', $validated['payout_method_id'])
+                    ->where('user_id', Auth::id())
+                    ->first();
+
+            if ($pm) {
+                $map = [
+                    'GBP' => 'GB', 'USD' => 'US', 'CAD' => 'CA', 'AUD' => 'AU',
+                    'INR' => 'IN', 'NGN' => 'NG', 'KES' => 'KE', 'GHS' => 'GH',
+                ];
+                $expectedCountry = $map[strtoupper($validated['ticket_currency'])] ?? 'GB';
+
+                if ($pm->type === 'bank' && strtoupper((string)$pm->country) !== $expectedCountry) {
+                    return back()
+                        ->withErrors([
+                            'payout_method_id' => "Selected payout method is for {$pm->country}, "
+                                . "but the chosen currency requires {$expectedCountry}."
+                        ])
+                        ->withInput();
+                }
+            }
+        }
+
+        // Files
         if ($request->hasFile('avatar')) {
             if ($event->avatar_url) {
                 Storage::disk('public')->delete($event->avatar_url);
@@ -245,7 +343,6 @@ class EventController extends Controller
             $event->avatar_url = $request->file('avatar')->store('avatars', 'public');
         }
 
-        // Banner
         if ($request->hasFile('banner')) {
             if ($event->banner_url) {
                 Storage::disk('public')->delete($event->banner_url);
@@ -253,20 +350,23 @@ class EventController extends Controller
             $event->banner_url = $request->file('banner')->store('banners', 'public');
         }
 
+        // Tags
         $tagsArray = isset($validated['tags']) && is_array($validated['tags']) ? $validated['tags'] : [];
 
-        $event->name        = $validated['name'];
-        $event->organizer   = $validated['organizer'] ?? null;
-        $event->category    = $validated['category'] ?? null;
-        $event->tags        = json_encode($tagsArray);
-        $event->location    = $validated['location'] ?? null;
-        $event->description = $validated['description'] ?? null;
-        $event->ticket_cost = $validated['ticket_cost'] ?? 0;
-        $event->ticket_currency = strtoupper($validated['ticket_currency']);
+        // Scalars
+        $event->name             = $validated['name'];
+        $event->organizer        = $validated['organizer'] ?? null;
+        $event->category         = $validated['category'] ?? null;
+        $event->tags             = json_encode($tagsArray); // keep consistent with your current storage
+        $event->location         = $validated['location'] ?? null;
+        $event->description      = $validated['description'] ?? null;
+        $event->ticket_currency  = strtoupper($validated['ticket_currency']);
+        $event->ticket_cost      = $isPaid ? $validated['ticket_cost'] : 0;
+        $event->payout_method_id = $isPaid ? ($validated['payout_method_id'] ?? null) : null;
 
         $event->save();
 
-        // Session upsert/delete (optional UI provides payload)
+        // Sessions upsert/delete (unchanged)
         $sessions   = $request->input('sessions', []);
         $touchedIds = [];
 
@@ -302,6 +402,7 @@ class EventController extends Controller
 
         return redirect()->route('dashboard')->with('success', 'Event updated successfully!');
     }
+
 
     public function destroy(Event $event)
     {

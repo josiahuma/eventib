@@ -14,6 +14,7 @@ use App\Http\Controllers\TicketLookupController;
 use App\Http\Controllers\MyTicketsController;
 use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\SitemapController;
+use App\Http\Controllers\PayoutMethodController;
 
 /**
  * Legacy numeric ID redirect (301).
@@ -60,6 +61,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get   ('/profile/payouts', [PayoutMethodController::class, 'index'])->name('profile.payouts');
+    Route::post  ('/profile/payouts', [PayoutMethodController::class, 'store'])->name('profile.payouts.store');
+    Route::get   ('/profile/payouts/{method}/edit', [PayoutMethodController::class, 'edit'])->name('profile.payouts.edit');
+    Route::put   ('/profile/payouts/{method}', [PayoutMethodController::class, 'update'])->name('profile.payouts.update');
+    Route::delete('/profile/payouts/{method}', [PayoutMethodController::class, 'destroy'])->name('profile.payouts.destroy');
+
 
     Route::get('/dashboard', [EventController::class, 'dashboard'])->name('dashboard');
 

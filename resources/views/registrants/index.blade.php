@@ -27,16 +27,13 @@
         {{-- Top KPI tiles --}}
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
             @php
-                // For paid events, count tickets (quantity, default 1)
-                // For free events, count attendees (1 + adults + children)
+                // Paid events -> tickets; free -> attendees (registrant + guests)
                 $totalUnits = $isPaidEvent
-                    ? $event->registrations->sum(function ($r) {
-                        return max(1, (int)($r->quantity ?? 1));
-                    })
+                    ? $event->registrations->sum(fn($r) => max(1, (int)($r->quantity ?? 1)))
                     : $event->registrations->sum(function ($r) {
                         $ad = max(0, (int)($r->party_adults ?? 0));
                         $ch = max(0, (int)($r->party_children ?? 0));
-                        return 1 + $ad + $ch; // registrant + guests
+                        return 1 + $ad + $ch;
                     });
             @endphp
 
@@ -51,12 +48,14 @@
                     {{ number_format($totalUnits) }}
                 </div>
             </div>
+
             <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                 <div class="text-sm text-gray-500">Amount earned</div>
                 <div class="mt-1 text-2xl font-semibold text-gray-900">
                     {{ $symbol }}{{ number_format($sumMinor/100, 2) }} <span class="text-base text-gray-500">{{ $currency }}</span>
                 </div>
             </div>
+
             <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                 <div>
                     <div class="text-sm text-gray-500">Event type</div>
@@ -66,12 +65,13 @@
                     </div>
                 </div>
             </div>
+
             @php
-                $disablePayout = $payoutMinor <= 0 || !$isPaidEvent || $hasProcessingPayout;
-                $payoutTitle   = $hasProcessingPayout
-                    ? 'Payout request already processing'
-                    : (!$isPaidEvent ? 'Free events have no payouts'
-                    : ($payoutMinor <= 0 ? 'No payout available yet' : 'Request payout to your UK bank'));
+                // New: enable button by current available funds (even if something is processing)
+                $disablePayout = !$isPaidEvent || $availableMinor <= 0;
+                $payoutTitle   = !$isPaidEvent
+                    ? 'Free events have no payouts'
+                    : ($availableMinor <= 0 ? 'No funds available yet' : 'Request payout');
             @endphp
 
             <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
@@ -81,7 +81,8 @@
                         <div class="mt-1 text-xs text-gray-500">
                             Available payout (After 9.99% processing fee deduction):
                             <span class="font-medium text-gray-900">
-                                {{ $symbol }}{{ number_format($payoutMinor/100, 2) }} <span class="text-xs text-gray-500">{{ $currency }}"</span>
+                                {{ $symbol }}{{ number_format($availableMinor/100, 2) }}
+                                <span class="text-xs text-gray-500">{{ $currency }}</span>
                             </span>
                         </div>
                     </div>
@@ -104,9 +105,9 @@
                         Email registrants
                     </a>
 
-                    {{-- Request payout --}}
+                    {{-- Request payout (enabled if availableMinor > 0) --}}
                     <form method="GET" action="{{ route('payouts.create', $event) }}" class="w-full">
-                        <input type="hidden" name="amount" value="{{ $payoutMinor }}">
+                        <input type="hidden" name="amount" value="{{ $availableMinor }}">
                         <button type="submit" title="{{ $payoutTitle }}"
                             class="inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium
                                 {{ $disablePayout
@@ -136,11 +137,10 @@
                 @forelse ($event->registrations as $reg)
                     @php
                         $qty = max(1, (int)($reg->quantity ?? 1));
-
                         $adults   = max(0, (int)($reg->party_adults ?? 0));
                         $children = max(0, (int)($reg->party_children ?? 0));
-                        $extra    = $adults + $children;      // additional guests (not counting registrant)
-                        $party    = 1 + $extra;               // total party size including registrant
+                        $extra    = $adults + $children;
+                        $party    = 1 + $extra;
                     @endphp
 
                     <div class="p-4 flex items-start justify-between gap-4">
@@ -150,7 +150,6 @@
                                 <span class="text-gray-500 font-normal">· {{ $reg->email ?? 'no email' }}</span>
                             </div>
 
-                            {{-- Sessions --}}
                             @if ($reg->sessions && $reg->sessions->count())
                                 <div class="mt-1 text-sm text-gray-600">
                                     Sessions:
@@ -160,7 +159,6 @@
                                 </div>
                             @endif
 
-                            {{-- Party / Tickets --}}
                             @if ($isPaidEvent)
                                 <div class="mt-2">
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 text-xs font-medium">
@@ -187,7 +185,6 @@
                         <div class="text-right">
                             <div class="text-sm text-gray-500">{{ optional($reg->created_at)->format('d M Y, g:ia') }}</div>
 
-                            {{-- keep old paid badge if you still set $reg->is_paid somewhere --}}
                             @if(isset($reg->is_paid))
                                 <div class="mt-1 text-xs inline-flex items-center px-2 py-0.5 rounded-full
                                     {{ $reg->is_paid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}">

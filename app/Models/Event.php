@@ -14,13 +14,14 @@ class Event extends Model
     protected $fillable = [
         'user_id','name','organizer','category','tags','location','description',
         'avatar_url','banner_url','ticket_cost','is_promoted','public_id',
-        'ticket_currency','payout_method_id',
+        'ticket_currency','payout_method_id', 'is_disabled',
     ];
 
     protected $casts = [
         'tags'        => 'array',
         'is_promoted' => 'boolean',
         'ticket_cost' => 'decimal:2',
+        'is_disabled' => 'boolean',
     ];
 
     public function getCurrencySymbolAttribute(): string

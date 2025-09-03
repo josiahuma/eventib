@@ -12,6 +12,7 @@ class PayoutController extends Controller
 {
     public function index(Request $request)
     {
+         $this->ensureActiveUser();
          $userId = Auth::id();
 
         // List of the user's events for the filter dropdown
@@ -61,6 +62,7 @@ class PayoutController extends Controller
 
     public function create(Event $event, Request $request)
     {
+        $this->ensureActiveUser();
         abort_unless($event->user_id === Auth::id(), 403);
 
         // Freshly compute how much is available right now

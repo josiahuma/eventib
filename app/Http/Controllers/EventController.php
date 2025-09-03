@@ -32,6 +32,7 @@ class EventController extends Controller
 
         // Base query + eager loads + min/max session dates (for ordering)
         $base = Event::query()
+            ->where('is_disabled', false)
             ->with(['sessions' => fn($q) => $q->orderBy('session_date', 'asc')])
             ->withMin('sessions', 'session_date')
             ->withMax('sessions', 'session_date');
@@ -251,6 +252,13 @@ class EventController extends Controller
     // PUBLIC show — uses implicit binding on {event} with your public_id fallback
     public function show(Event $event)
     {
+        $user = Auth::user();
+
+        // If disabled, only the owner or admins may see it
+        if ($event->is_disabled && !($user && ($user->id === $event->user_id || $user->is_admin))) {
+            abort(404); // “not found” is nicer than 403 for public
+        }
+
         $event->load(['sessions' => fn($q) => $q->orderBy('session_date', 'asc')]);
         return view('events.show', compact('event'));
     }

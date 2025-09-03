@@ -15,6 +15,11 @@ use App\Http\Controllers\MyTicketsController;
 use App\Http\Controllers\SocialAuthController;
 use App\Http\Controllers\SitemapController;
 use App\Http\Controllers\PayoutMethodController;
+use App\Http\Controllers\Admin\PayoutAdminController;
+use App\Http\Controllers\Admin\AdminDashboardController;
+use App\Http\Controllers\Admin\UserAdminController;
+use App\Http\Controllers\Admin\EventAdminController;
+
 
 /**
  * Legacy numeric ID redirect (301).
@@ -56,8 +61,42 @@ Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'
 
 /* ------------------------------------------------------ */
 
+// ADMIN routes (manage all payouts)
+// Note: we keep 'auth' middleware here; admin check happens in the controller
+Route::middleware(['auth'])
+    ->prefix('admin')
+    ->name('admin.')
+    ->group(function () {
+        // Dashboard
+        Route::get('/', [AdminDashboardController::class, 'index'])
+            ->name('dashboard');
+
+        // Payouts
+        Route::get('/payouts', [PayoutAdminController::class, 'index'])
+            ->name('payouts.index');
+
+        // ✅ Missing route (PATCH matches your Blade)
+        Route::match(['patch','put'], '/payouts/{payout}/status', [PayoutAdminController::class, 'updateStatus'])
+            ->name('payouts.updateStatus');
+
+        // Users
+        Route::get('/users', [UserAdminController::class, 'index'])
+            ->name('users.index');
+        Route::patch('/users/{user}/toggle-admin', [UserAdminController::class, 'toggleAdmin'])
+            ->name('users.toggle-admin');
+        Route::patch('/users/{user}/toggle-disabled', [UserAdminController::class, 'toggleDisabled'])
+            ->name('users.toggle-disabled');
+
+        // Events
+        Route::get('/events', [EventAdminController::class, 'index'])
+            ->name('events.index');
+        Route::patch('/events/{event}/toggle-disabled', [EventAdminController::class, 'toggleDisabled'])
+            ->name('events.toggle-disabled');
+        Route::patch('/events/{event}/toggle-promote', [EventAdminController::class, 'togglePromote'])
+            ->name('events.toggle-promote');
+    });
 // AUTH-only routes (manage your own events)
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

@@ -16,6 +16,10 @@ class RegistrationController extends Controller
     // Show the registration form
     public function create(Event $event)
     {
+         if ($event->is_disabled) {
+            return redirect()->route('home')->with('error', 'This event is unavailable.');
+        }
+        
         $event->load(['sessions' => fn ($q) => $q->orderBy('session_date', 'asc')]);
         return view('events.register', compact('event'));
     }

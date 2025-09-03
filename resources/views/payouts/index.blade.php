@@ -25,9 +25,9 @@
         <div class="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
             {{-- Event filter --}}
             <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm md:col-span-1">
-                <label class="block text-sm text-gray-600 mb-1">Event</label>
+                <label for="event-filter" class="block text-sm text-gray-600 mb-1">Event</label>
                 <form method="GET" class="flex items-center gap-2">
-                    <select name="event" class="w-full rounded-lg border-gray-300"
+                    <select id="event-filter" name="event" class="w-full rounded-lg border-gray-300"
                             onchange="this.form.submit()">
                         <option value="">All events</option>
                         @foreach($events as $ev)
@@ -36,6 +36,10 @@
                             </option>
                         @endforeach
                     </select>
+                    @if($selectedEvent)
+                        <a href="{{ route('payouts.index') }}"
+                           class="text-xs text-gray-600 hover:text-gray-800 whitespace-nowrap">Clear</a>
+                    @endif
                 </form>
                 @if(!$selectedEvent)
                     <p class="mt-2 text-xs text-gray-500">Select an event to see per-event totals.</p>
@@ -70,10 +74,11 @@
                     @endif
                 </div>
                 @php
-                    $paidCount = $payouts->getCollection()->where('status','paid')->count();
+                    // Count PAID rows on the current page (UI hint)
+                    $paidOnPage = $payouts->getCollection()->where('status','paid')->count();
                 @endphp
                 <div class="text-xs text-gray-500 mt-1">
-                    {{ $paidCount }} {{ Str::plural('payment', $paidCount) }} (on this page)
+                    {{ $paidOnPage }} {{ Str::plural('payment', $paidOnPage) }} (on this page)
                 </div>
             </div>
         </div>
@@ -92,6 +97,14 @@
                         $rowCur = strtoupper($p->event->ticket_currency ?? $p->currency ?? 'GBP');
                         $symbols = ['GBP'=>'£','USD'=>'$','EUR'=>'€','NGN'=>'₦','KES'=>'KSh','GHS'=>'₵','ZAR'=>'R','CAD'=>'$','AUD'=>'$'];
                         $rowSym  = $symbols[$rowCur] ?? '';
+
+                        // Mask sensitive fields (last 2 / last 4 visible)
+                        $maskedSort = $p->sort_code
+                            ? str_repeat('•', max(0, strlen($p->sort_code) - 2)).substr($p->sort_code, -2)
+                            : '—';
+                        $maskedAcct = $p->account_number
+                            ? '••••'.substr($p->account_number, -4)
+                            : '—';
                     @endphp
                     <div class="p-4 flex items-center justify-between gap-4">
                         <div class="min-w-0">
@@ -102,7 +115,7 @@
                                 Amount: {{ $rowSym }}{{ number_format($p->amount/100, 2) }}
                                 <span class="text-xs text-gray-500">{{ $rowCur }}</span>
                                 <span class="mx-2">•</span>
-                                Sort code: {{ $p->sort_code ?? '—' }} — Account: {{ $p->account_number ?? '—' }}
+                                Sort code: {{ $maskedSort }} — Account: {{ $maskedAcct }}
                             </div>
                         </div>
                         <div class="text-right">
@@ -116,7 +129,14 @@
                         </div>
                     </div>
                 @empty
-                    <div class="p-8 text-center text-gray-600">No payout requests yet.</div>
+                    <div class="p-8 text-center text-gray-600">
+                        @if($selectedEvent)
+                            No payout requests yet for <span class="font-medium">{{ $selectedEvent->name }}</span>.
+                            <a href="{{ route('payouts.index') }}" class="underline">Show all events</a>
+                        @else
+                            No payout requests yet.
+                        @endif
+                    </div>
                 @endforelse
             </div>
 

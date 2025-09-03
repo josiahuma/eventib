@@ -48,8 +48,22 @@
                             </button>
                         </x-slot>
                         <x-slot name="content">
+                            @if(Auth::user()?->is_admin)
+                                <x-dropdown-link :href="route('admin.dashboard')">
+                                    <span class="inline-flex items-center gap-2">
+                                        {{-- shield icon --}}
+                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                            <path d="M12 2.25a.75.75 0 01.35.086l7.5 3.75a.75.75 0 01.4.664v5.25c0 4.424-2.942 8.458-7.35 9.72a.75.75 0 01-.2 0C7.292 20.458 4.35 16.424 4.35 12V6.75a.75.75 0 01.4-.664l7.5-3.75A.75.75 0 0112 2.25z"/>
+                                        </svg>
+                                        Admin dashboard
+                                    </span>
+                                </x-dropdown-link>
+                                <div class="my-1 border-t border-gray-100"></div>
+                            @endif
+
                             <x-dropdown-link :href="route('profile.edit')">Profile</x-dropdown-link>
                             <x-dropdown-link :href="route('profile.payouts')">Add Payout methods</x-dropdown-link>
+
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
                                 <x-dropdown-link :href="route('logout')"
@@ -58,6 +72,7 @@
                                 </x-dropdown-link>
                             </form>
                         </x-slot>
+
                     </x-dropdown>
                 @else
                     <a href="{{ route('login') }}" class="text-gray-600 hover:text-gray-800 px-4">Login</a>
@@ -111,6 +126,18 @@
                     <div class="font-medium text-sm text-gray-500">{{ Auth::user()->email }}</div>
                 </div>
                 <div class="mt-3 space-y-1">
+                    @if(Auth::user()?->is_admin)
+                                <x-responsive-nav-link :href="route('admin.dashboard')">
+                                    <span class="inline-flex items-center gap-2">
+                                        {{-- shield icon --}}
+                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                            <path d="M12 2.25a.75.75 0 01.35.086l7.5 3.75a.75.75 0 01.4.664v5.25c0 4.424-2.942 8.458-7.35 9.72a.75.75 0 01-.2 0C7.292 20.458 4.35 16.424 4.35 12V6.75a.75.75 0 01.4-.664l7.5-3.75A.75.75 0 0112 2.25z"/>
+                                        </svg>
+                                        Admin dashboard
+                                    </span>
+                                </x-responsive-nav-link>
+                                <div class="my-1 border-t border-gray-100"></div>
+                        @endif
                     <x-responsive-nav-link :href="route('profile.edit')">Profile</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('profile.payouts')">Add Payout methods</x-responsive-nav-link>
                     <form method="POST" action="{{ route('logout') }}">

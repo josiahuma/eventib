@@ -8,6 +8,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use App\Models\User;
+use Illuminate\Validation\ValidationException;
+
 
 class AuthenticatedSessionController extends Controller
 {
@@ -24,6 +27,19 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request): RedirectResponse
     {
+        $credentials = $request->validate([
+            'email' => ['required','string','email'],
+            'password' => ['required','string'],
+        ]);
+
+        $user = User::where('email', $credentials['email'])->first();
+        if ($user && $user->is_disabled) {
+            throw ValidationException::withMessages([
+                'email' => 'Your account has been disabled. Contact support.',
+            ]);
+        }
+
+
         $request->authenticate();
 
         $request->session()->regenerate();

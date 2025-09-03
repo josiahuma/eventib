@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class EventPayout extends Model
 {
+    protected $casts = [
+        'paid_at' => 'datetime',
+    ];
+    
     protected $fillable = [
         'event_id','user_id','amount','currency',
         'account_name','sort_code','account_number','iban',

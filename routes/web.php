@@ -175,10 +175,17 @@ Route::middleware(['auth'])->group(function () {
         [\App\Http\Controllers\TicketController::class, 'pdfRegistration']
     )->name('tickets.registration.pdf');
 
-    // Organizer scanner
-    Route::get('/events/{event}/tickets/scan',  [\App\Http\Controllers\TicketController::class, 'scanPage'])->name('tickets.scan');
-    Route::post('/events/{event}/tickets/scan', [\App\Http\Controllers\TicketController::class, 'scanValidate'])->name('tickets.scan.validate');
+    // Organizer scan
+    Route::get('/events/{event}/tickets/scan', [TicketController::class, 'scanPage'])->name('tickets.scan');
+    Route::post('/events/{event}/tickets/scan', [TicketController::class, 'scanValidate'])->name('tickets.scan.validate');
 
+    // Organizer scanner
+    Route::get('/events/{event}/scan',  [TicketController::class, 'scanPage'])->name('tickets.scan.page');
+    Route::post('/events/{event}/scan', [TicketController::class, 'scanValidate'])->name('tickets.scan.validate');
+
+    // Organizer: per-event ticket list + PDF export
+    Route::get('/events/{event}/tickets', [TicketController::class, 'eventIndex'])->name('events.tickets.index');
+    Route::get('/events/{event}/tickets/export-pdf', [TicketController::class, 'exportPdf'])->name('events.tickets.export-pdf');
 });
 
 // PUBLIC registration + avatar (these don't clash with /events/create)

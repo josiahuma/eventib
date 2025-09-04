@@ -45,7 +45,14 @@
                                 </span>
                             </div>
                         </div>
+
                         <div class="flex items-center gap-2">
+                            {{-- NEW: Admin can jump straight to registrants (no unlock) --}}
+                            <a href="{{ route('events.registrants', $e) }}"
+                               class="px-3 py-1.5 text-sm rounded-md border bg-white hover:bg-gray-50">
+                                View registrants
+                            </a>
+
                             <form method="POST" action="{{ route('admin.events.toggle-promote', $e) }}">
                                 @csrf @method('PATCH')
                                 <button class="px-3 py-1.5 text-sm rounded-md border bg-white hover:bg-gray-50">

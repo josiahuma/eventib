@@ -16,29 +16,43 @@ class RegistrantsController extends Controller
 
     public function index(Event $event)
     {
-        abort_unless($event->user_id === Auth::id(), 403);
+        $user = Auth::user();
+        abort_unless($user, 403);
+
+        $isAdmin = (bool) ($user->is_admin ?? false);
+        $isOwner = $event->user_id === $user->id;
+
+        // ✅ Access control: owner OR admin
+        abort_unless($isOwner || $isAdmin, 403);
 
         $isPaidEvent = ($event->ticket_cost ?? 0) > 0;
 
-        $isUnlocked = EventUnlock::where('event_id', $event->id)
-            ->where('user_id', Auth::id())
-            ->whereNotNull('unlocked_at')
-            ->exists();
+        // ✅ Unlock gate only applies to non-admins on FREE events
+        if (!$isAdmin && !$isPaidEvent) {
+            $isUnlocked = EventUnlock::where('event_id', $event->id)
+                ->where('user_id', $user->id)
+                ->whereNotNull('unlocked_at')
+                ->exists();
 
-        if (!$isPaidEvent && !$isUnlocked) {
-            return redirect()->route('events.registrants.unlock', $event)
-                ->with('error', 'Unlock registrant details for this free event.');
+            if (!$isUnlocked) {
+                return redirect()->route('events.registrants.unlock', $event)
+                    ->with('error', 'Unlock registrant details for this free event.');
+            }
         }
 
-        // Only PAID rows for paid events
+        // Load registrations:
+        //  - For paid events: only include rows with status=paid
+        //  - For free events: include all (as per original behavior)
         $event->load([
             'registrations' => function ($q) use ($isPaidEvent) {
-                if ($isPaidEvent) $q->where('status', 'paid');
+                if ($isPaidEvent) {
+                    $q->where('status', 'paid');
+                }
             },
-            'registrations.sessions' => fn($q) => $q->orderBy('session_date'),
+            'registrations.sessions' => fn ($q) => $q->orderBy('session_date'),
         ]);
 
-        // Gross (minor units)
+        // Sum gross using registration->amount (assumed major units)
         $sumMinor = $event->registrations->sum(function ($r) {
             return (int) round(((float) ($r->amount ?? 0)) * 100);
         });
@@ -49,18 +63,21 @@ class RegistrantsController extends Controller
         // Net currently earned
         $payoutMinor = max(0, $sumMinor - $commissionMinor);
 
+        // ✅ When admin is viewing, compute payouts using the EVENT OWNER id
+        $ownerId = $event->user_id;
+
         // Subtract all payouts that are not failed/cancelled
         $deductedMinor = (int) EventPayout::where('event_id', $event->id)
-            ->where('user_id', Auth::id())
+            ->where('user_id', $ownerId)
             ->whereNotIn('status', ['failed', 'cancelled'])
             ->sum('amount');
 
         // What can be requested right now
         $availableMinor = max(0, $payoutMinor - $deductedMinor);
 
-        // We still show a “Processing” chip for context
+        // Show a “Processing” chip for context
         $hasProcessingPayout = EventPayout::where('event_id', $event->id)
-            ->where('user_id', Auth::id())
+            ->where('user_id', $ownerId)
             ->where('status', 'processing')
             ->exists();
 
@@ -78,23 +95,42 @@ class RegistrantsController extends Controller
             'currency'            => $currency,
             'symbol'              => $symbol,
             'hasProcessingPayout' => $hasProcessingPayout,
+            // Optional: pass flags in case your Blade wants to show admin-only affordances
+            'isAdmin'             => $isAdmin,
+            'isOwner'             => $isOwner,
         ]);
     }
 
     public function unlock(Event $event)
     {
-        abort_unless($event->user_id === Auth::id(), 403);
+        $user = Auth::user();
+        abort_unless($user, 403);
+
+        $isAdmin = (bool) ($user->is_admin ?? false);
+        $isOwner = $event->user_id === $user->id;
+
+        // ✅ Admins never need to unlock
+        if ($isAdmin) {
+            return redirect()->route('events.registrants', $event)
+                ->with('success', 'Admins can view registrants without unlocking.');
+        }
+
+        // Only the owner can unlock
+        abort_unless($isOwner, 403);
+
+        // Paid events don’t need unlocking
         if (($event->ticket_cost ?? 0) > 0) {
             return redirect()->route('events.registrants', $event);
         }
 
         $already = EventUnlock::where('event_id', $event->id)
-            ->where('user_id', Auth::id())
+            ->where('user_id', $user->id)
             ->whereNotNull('unlocked_at')
             ->first();
 
         if ($already) {
-            return redirect()->route('events.registrants', $event)->with('success', 'Registrants already unlocked.');
+            return redirect()->route('events.registrants', $event)
+                ->with('success', 'Registrants already unlocked.');
         }
 
         return view('registrants.unlock', [
@@ -106,7 +142,20 @@ class RegistrantsController extends Controller
 
     public function checkout(Request $request, Event $event)
     {
-        abort_unless($event->user_id === Auth::id(), 403);
+        $user = Auth::user();
+        abort_unless($user, 403);
+
+        $isAdmin = (bool) ($user->is_admin ?? false);
+        $isOwner = $event->user_id === $user->id;
+
+        // ✅ Admins never unlock / pay
+        if ($isAdmin) {
+            return redirect()->route('events.registrants', $event);
+        }
+
+        // Only the owner can unlock
+        abort_unless($isOwner, 403);
+
         if (($event->ticket_cost ?? 0) > 0) {
             return redirect()->route('events.registrants', $event);
         }
@@ -130,14 +179,14 @@ class RegistrantsController extends Controller
             'metadata' => [
                 'purpose'  => 'registrants_unlock',
                 'event_id' => (string) $event->id,
-                'user_id'  => (string) Auth::id(),
+                'user_id'  => (string) $user->id,
             ],
             'success_url' => route('events.registrants.unlock.success', $event) . '?session_id={CHECKOUT_SESSION_ID}',
             'cancel_url'  => route('events.registrants.unlock', $event),
         ]);
 
         EventUnlock::updateOrCreate(
-            ['event_id' => $event->id, 'user_id' => Auth::id()],
+            ['event_id' => $event->id, 'user_id' => $user->id],
             [
                 'stripe_session_id' => $session->id,
                 'amount'            => $this->unlockAmount, // minor units
@@ -150,7 +199,19 @@ class RegistrantsController extends Controller
 
     public function success(Request $request, Event $event)
     {
-        abort_unless($event->user_id === Auth::id(), 403);
+        $user = Auth::user();
+        abort_unless($user, 403);
+
+        $isAdmin = (bool) ($user->is_admin ?? false);
+        $isOwner = $event->user_id === $user->id;
+
+        // ✅ Admins don’t need success flow
+        if ($isAdmin) {
+            return redirect()->route('events.registrants', $event);
+        }
+
+        // Only owner completes unlock
+        abort_unless($isOwner, 403);
 
         $sessionId = $request->query('session_id');
         if (!$sessionId) {
@@ -169,7 +230,7 @@ class RegistrantsController extends Controller
         $paidCurr  = strtolower((string) ($session->currency ?? $this->currency));
 
         EventUnlock::updateOrCreate(
-            ['event_id' => $event->id, 'user_id' => Auth::id()],
+            ['event_id' => $event->id, 'user_id' => $user->id],
             [
                 'stripe_session_id'        => $session->id,
                 'stripe_payment_intent_id' => $session->payment_intent ?? null,

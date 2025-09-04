@@ -19,6 +19,14 @@ use App\Http\Controllers\Admin\PayoutAdminController;
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\UserAdminController;
 use App\Http\Controllers\Admin\EventAdminController;
+use App\Http\Controllers\TicketController;
+use App\Models\EventRegistration;
+use App\Models\EventTicket;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\TicketPdfController;
+use App\Observers\EventRegistrationObserver;
+use App\Http\Controllers\CheckinsController;
 
 
 /**
@@ -138,9 +146,39 @@ Route::middleware(['auth'])->group(function () {
         ->name('events.registrants.email.send');
 
     // "My Tickets" area (for attendees to manage their own registrations)
-    Route::get('/my/tickets', [MyTicketsController::class, 'index'])->name('my.tickets');
-    Route::get('/my/tickets/{registration}', [MyTicketsController::class, 'edit'])->name('my.tickets.edit');
-    Route::post('/my/tickets/{registration}', [MyTicketsController::class, 'update'])->name('my.tickets.update');
+   // My Tickets (single landing for attendees)
+    Route::get('/my-tickets', [\App\Http\Controllers\MyTicketsController::class, 'index'])->name('my.tickets');
+    Route::get('/my-tickets/{registration}/edit', [\App\Http\Controllers\MyTicketsController::class, 'edit'])->name('my.tickets.edit');
+    Route::post('/my-tickets/{registration}', [\App\Http\Controllers\MyTicketsController::class, 'update'])->name('my.tickets.update');
+
+    // Jump to first ticket QR (paid)
+    Route::get('/events/{event}/registrations/{registration}/tickets/first',
+        [\App\Http\Controllers\TicketController::class, 'first']
+    )->name('tickets.first');
+
+    // Free pass QR
+    Route::get('/events/{event}/registrations/{registration}/pass',
+        [\App\Http\Controllers\TicketController::class, 'pass']
+    )->name('tickets.pass');
+
+    // Single paid ticket QR
+    Route::get('/events/{event}/registrations/{registration}/tickets/{ticket}',
+        [\App\Http\Controllers\TicketController::class, 'show']
+    )->name('tickets.show');
+
+    // PDFs
+    Route::get('/events/{event}/registrations/{registration}/tickets/{ticket}/pdf',
+        [\App\Http\Controllers\TicketController::class, 'pdfTicket']
+    )->name('tickets.ticket.pdf');
+
+    Route::get('/events/{event}/registrations/{registration}/tickets.pdf',
+        [\App\Http\Controllers\TicketController::class, 'pdfRegistration']
+    )->name('tickets.registration.pdf');
+
+    // Organizer scanner
+    Route::get('/events/{event}/tickets/scan',  [\App\Http\Controllers\TicketController::class, 'scanPage'])->name('tickets.scan');
+    Route::post('/events/{event}/tickets/scan', [\App\Http\Controllers\TicketController::class, 'scanValidate'])->name('tickets.scan.validate');
+
 });
 
 // PUBLIC registration + avatar (these don't clash with /events/create)
@@ -167,6 +205,8 @@ Route::post('/events/{event}/register', [RegistrationController::class, 'store']
 
 Route::get('/events/{event}/register/result', [RegistrationController::class, 'result'])
     ->name('events.register.result');
+
+
 
 // Sitemap
 Route::get('/sitemap', [SitemapController::class, 'index']);

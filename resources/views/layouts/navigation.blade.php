@@ -23,7 +23,7 @@
                     @auth
                         {{-- FIX: use x-nav-link so spacing matches --}}
                         <x-nav-link :href="route('my.tickets')" :active="request()->routeIs('my.tickets*')">
-                            My tickets
+                            My Tickets
                         </x-nav-link>
                         <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                             Manage Events
@@ -62,6 +62,7 @@
                             @endif
 
                             <x-dropdown-link :href="route('profile.edit')">Profile</x-dropdown-link>
+                            <x-dropdown-link :href="route('my.tickets')">My Tickets</x-dropdown-link>
                             <x-dropdown-link :href="route('profile.payouts')">Add Payout methods</x-dropdown-link>
 
                             <form method="POST" action="{{ route('logout') }}">
@@ -106,7 +107,7 @@
             @auth
                 {{-- add My tickets to mobile too --}}
                 <x-responsive-nav-link :href="route('my.tickets')" :active="request()->routeIs('my.tickets*')">
-                    My tickets
+                    My Tickets
                 </x-responsive-nav-link>
 
                 <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
@@ -139,6 +140,7 @@
                                 <div class="my-1 border-t border-gray-100"></div>
                         @endif
                     <x-responsive-nav-link :href="route('profile.edit')">Profile</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('my.tickets')">My Tickets</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('profile.payouts')">Add Payout methods</x-responsive-nav-link>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf

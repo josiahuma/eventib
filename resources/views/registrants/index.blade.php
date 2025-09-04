@@ -63,6 +63,12 @@
                         {{ $isPaidEvent ? 'bg-black/80 text-white' : 'bg-emerald-500 text-white' }}">
                         {{ $isPaidEvent ? 'Paid event' : 'Free event' }}
                     </div>
+                    <div class="mt-2 text-xs text-gray-400">
+                        <a href="{{ route('tickets.scan.page', $event) }}"
+                            class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100">
+                            Scan tickets
+                        </a>
+                    </div>
                 </div>
             </div>
 

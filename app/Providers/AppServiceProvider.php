@@ -6,6 +6,8 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Auth\Events\Registered;
 use App\Listeners\SendWelcomeEmail;
+use App\Models\EventRegistration;
+use App\Observers\EventRegistrationObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,5 +25,6 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         //
+        EventRegistration::observe(EventRegistrationObserver::class);
     }
 }

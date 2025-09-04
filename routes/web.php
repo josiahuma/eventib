@@ -134,7 +134,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/events/{event}/scan', [TicketController::class, 'scanValidate'])->name('tickets.scan.validate');
 
     // Scanner alias for older links
-    Route::get('/events/{event}/tickets/scan', [TicketController::class, 'scan'])->name('tickets.scan');
+    Route::get('/events/{event}/tickets/scan', [TicketController::class, 'scanPage'])->name('tickets.scan');
 
     // Check-ins list (organiser)
     Route::get('/events/{event}/checkins', [CheckinsController::class, 'index'])->name('events.checkins.index');

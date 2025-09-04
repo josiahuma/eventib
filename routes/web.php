@@ -20,23 +20,15 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\UserAdminController;
 use App\Http\Controllers\Admin\EventAdminController;
 use App\Http\Controllers\TicketController;
-use App\Models\EventRegistration;
-use App\Models\EventTicket;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use App\Http\Controllers\TicketPdfController;
-use App\Observers\EventRegistrationObserver;
 use App\Http\Controllers\CheckinsController;
 
-
-/**
- * Legacy numeric ID redirect (301).
- * Works for /events/14, /events/14/register, /events/14/avatar, etc.
- * Preserves any query string.
- */
-// --- Legacy numeric ID redirect (must stay ABOVE other /events/* routes) ---
+/*
+|--------------------------------------------------------------------------
+| Legacy numeric ID redirect (must be ABOVE other /events/* routes)
+|--------------------------------------------------------------------------
+*/
 Route::get('/events/{id}/{tail?}', function (int $id, $tail = null) {
-    $event = EventModel::query()->select('public_id')->find($id); // 👈 use EventModel
+    $event = EventModel::query()->select('public_id')->find($id);
     abort_unless($event && $event->public_id, 404);
 
     $base = '/events/'.$event->public_id.($tail ? '/'.$tail : '');
@@ -45,183 +37,133 @@ Route::get('/events/{id}/{tail?}', function (int $id, $tail = null) {
     return redirect($base.($qs ? '?'.$qs : ''), 301);
 })->whereNumber('id')->where('tail', '.*');
 
-// Homepage - public listing
+/*
+|--------------------------------------------------------------------------
+| Public pages
+|--------------------------------------------------------------------------
+*/
 Route::get('/', [EventController::class, 'publicIndex'])->name('homepage');
-
-// Marketing pages
 Route::get('/how-it-works', [PageController::class, 'how'])->name('how');
 Route::get('/pricing', [PageController::class, 'pricing'])->name('pricing');
 
-// Stripe webhook
-Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])
-    ->name('stripe.webhook');
+/* Stripe webhook */
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
 
-/* -------------------- Social login -------------------- */
-// /auth/google/redirect
+/* Social login */
 Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirect'])
-    ->whereIn('provider', ['google', 'github'])
-    ->name('oauth.redirect');
-
-// /auth/google/callback
+    ->whereIn('provider', ['google','github'])->name('oauth.redirect');
 Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'])
-    ->whereIn('provider', ['google', 'github'])
-    ->name('oauth.callback');
+    ->whereIn('provider', ['google','github'])->name('oauth.callback');
 
-/* ------------------------------------------------------ */
+/*
+|--------------------------------------------------------------------------
+| Admin (auth required; admin check in controllers)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/', [AdminDashboardController::class, 'index'])->name('dashboard');
 
-// ADMIN routes (manage all payouts)
-// Note: we keep 'auth' middleware here; admin check happens in the controller
-Route::middleware(['auth'])
-    ->prefix('admin')
-    ->name('admin.')
-    ->group(function () {
-        // Dashboard
-        Route::get('/', [AdminDashboardController::class, 'index'])
-            ->name('dashboard');
+    // Payouts
+    Route::get('/payouts', [PayoutAdminController::class, 'index'])->name('payouts.index');
+    Route::match(['patch','put'], '/payouts/{payout}/status', [PayoutAdminController::class, 'updateStatus'])
+        ->name('payouts.updateStatus');
 
-        // Payouts
-        Route::get('/payouts', [PayoutAdminController::class, 'index'])
-            ->name('payouts.index');
+    // Users
+    Route::get('/users', [UserAdminController::class, 'index'])->name('users.index');
+    Route::patch('/users/{user}/toggle-admin', [UserAdminController::class, 'toggleAdmin'])->name('users.toggle-admin');
+    Route::patch('/users/{user}/toggle-disabled', [UserAdminController::class, 'toggleDisabled'])->name('users.toggle-disabled');
 
-        // ✅ Missing route (PATCH matches your Blade)
-        Route::match(['patch','put'], '/payouts/{payout}/status', [PayoutAdminController::class, 'updateStatus'])
-            ->name('payouts.updateStatus');
+    // Events
+    Route::get('/events', [EventAdminController::class, 'index'])->name('events.index');
+    Route::patch('/events/{event}/toggle-disabled', [EventAdminController::class, 'toggleDisabled'])->name('events.toggle-disabled');
+    Route::patch('/events/{event}/toggle-promote', [EventAdminController::class, 'togglePromote'])->name('events.toggle-promote');
+});
 
-        // Users
-        Route::get('/users', [UserAdminController::class, 'index'])
-            ->name('users.index');
-        Route::patch('/users/{user}/toggle-admin', [UserAdminController::class, 'toggleAdmin'])
-            ->name('users.toggle-admin');
-        Route::patch('/users/{user}/toggle-disabled', [UserAdminController::class, 'toggleDisabled'])
-            ->name('users.toggle-disabled');
-
-        // Events
-        Route::get('/events', [EventAdminController::class, 'index'])
-            ->name('events.index');
-        Route::patch('/events/{event}/toggle-disabled', [EventAdminController::class, 'toggleDisabled'])
-            ->name('events.toggle-disabled');
-        Route::patch('/events/{event}/toggle-promote', [EventAdminController::class, 'togglePromote'])
-            ->name('events.toggle-promote');
-    });
-// AUTH-only routes (manage your own events)
+/*
+|--------------------------------------------------------------------------
+| Auth-only (organisers & attendees)
+|--------------------------------------------------------------------------
+*/
 Route::middleware(['auth'])->group(function () {
+    // Profile & payouts
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
     Route::get   ('/profile/payouts', [PayoutMethodController::class, 'index'])->name('profile.payouts');
     Route::post  ('/profile/payouts', [PayoutMethodController::class, 'store'])->name('profile.payouts.store');
     Route::get   ('/profile/payouts/{method}/edit', [PayoutMethodController::class, 'edit'])->name('profile.payouts.edit');
     Route::put   ('/profile/payouts/{method}', [PayoutMethodController::class, 'update'])->name('profile.payouts.update');
     Route::delete('/profile/payouts/{method}', [PayoutMethodController::class, 'destroy'])->name('profile.payouts.destroy');
 
-
+    // Dashboard & events CRUD (no show)
     Route::get('/dashboard', [EventController::class, 'dashboard'])->name('dashboard');
-
-    // Resource CRUD (excludes show so it won't clash with public show)
     Route::resource('events', EventController::class)->except(['show']);
 
-    // View registrants (organizer)
-    Route::get('/events/{event}/registrants', [RegistrantsController::class, 'index'])
-        ->name('events.registrants');
+    // Registrants (organiser)
+    Route::get('/events/{event}/registrants', [RegistrantsController::class, 'index'])->name('events.registrants');
+    Route::get('/events/{event}/registrants/unlock', [RegistrantsController::class, 'unlock'])->name('events.registrants.unlock');
+    Route::post('/events/{event}/registrants/checkout', [RegistrantsController::class, 'checkout'])->name('events.registrants.checkout');
+    Route::get('/events/{event}/registrants/unlock/success', [RegistrantsController::class, 'success'])->name('events.registrants.unlock.success');
 
-    // Unlock flow for FREE events
-    Route::get('/events/{event}/registrants/unlock', [RegistrantsController::class, 'unlock'])
-        ->name('events.registrants.unlock');
-
-    Route::post('/events/{event}/registrants/checkout', [RegistrantsController::class, 'checkout'])
-        ->name('events.registrants.checkout');
-
-    Route::get('/events/{event}/registrants/unlock/success', [RegistrantsController::class, 'success'])
-        ->name('events.registrants.unlock.success');
-
-    // Payout routes
+    // Organiser payouts
     Route::get('/payouts', [PayoutController::class, 'index'])->name('payouts.index');
     Route::get('/events/{event}/payouts/new', [PayoutController::class, 'create'])->name('payouts.create');
     Route::post('/events/{event}/payouts', [PayoutController::class, 'store'])->name('payouts.store');
 
     // Email registrants
-    Route::get('/events/{event}/registrants/email', [RegistrantEmailController::class, 'create'])
-        ->name('events.registrants.email');
-    Route::post('/events/{event}/registrants/email', [RegistrantEmailController::class, 'send'])
-        ->name('events.registrants.email.send');
+    Route::get('/events/{event}/registrants/email', [RegistrantEmailController::class, 'create'])->name('events.registrants.email');
+    Route::post('/events/{event}/registrants/email', [RegistrantEmailController::class, 'send'])->name('events.registrants.email.send');
 
-    // "My Tickets" area (for attendees to manage their own registrations)
-   // My Tickets (single landing for attendees)
-    Route::get('/my-tickets', [\App\Http\Controllers\MyTicketsController::class, 'index'])->name('my.tickets');
-    Route::get('/my-tickets/{registration}/edit', [\App\Http\Controllers\MyTicketsController::class, 'edit'])->name('my.tickets.edit');
-    Route::post('/my-tickets/{registration}', [\App\Http\Controllers\MyTicketsController::class, 'update'])->name('my.tickets.update');
+    // My Tickets (attendees)
+    Route::get('/my-tickets', [MyTicketsController::class, 'index'])->name('my.tickets');
+    Route::get('/my-tickets/{registration}/edit', [MyTicketsController::class, 'edit'])->name('my.tickets.edit');
+    Route::post('/my-tickets/{registration}', [MyTicketsController::class, 'update'])->name('my.tickets.update');
 
-    // Jump to first ticket QR (paid)
-    Route::get('/events/{event}/registrations/{registration}/tickets/first',
-        [\App\Http\Controllers\TicketController::class, 'first']
-    )->name('tickets.first');
-
-    // Free pass QR
-    Route::get('/events/{event}/registrations/{registration}/pass',
-        [\App\Http\Controllers\TicketController::class, 'pass']
-    )->name('tickets.pass');
-
-    // Single paid ticket QR
-    Route::get('/events/{event}/registrations/{registration}/tickets/{ticket}',
-        [\App\Http\Controllers\TicketController::class, 'show']
-    )->name('tickets.show');
+    // Ticket viewing (attendees)
+    Route::get('/events/{event}/registrations/{registration}/tickets/first', [TicketController::class, 'first'])->name('tickets.first');
+    Route::get('/events/{event}/registrations/{registration}/pass',        [TicketController::class, 'pass'])->name('tickets.pass');
+    Route::get('/events/{event}/registrations/{registration}/tickets/{ticket}', [TicketController::class, 'show'])->name('tickets.show');
 
     // PDFs
-    Route::get('/events/{event}/registrations/{registration}/tickets/{ticket}/pdf',
-        [\App\Http\Controllers\TicketController::class, 'pdfTicket']
-    )->name('tickets.ticket.pdf');
+    Route::get('/events/{event}/registrations/{registration}/tickets/{ticket}/pdf', [TicketController::class, 'pdfTicket'])->name('tickets.ticket.pdf');
+    Route::get('/events/{event}/registrations/{registration}/tickets.pdf',          [TicketController::class, 'pdfRegistration'])->name('tickets.registration.pdf');
 
-    Route::get('/events/{event}/registrations/{registration}/tickets.pdf',
-        [\App\Http\Controllers\TicketController::class, 'pdfRegistration']
-    )->name('tickets.registration.pdf');
-
-    // Organizer scan
-    Route::get('/events/{event}/tickets/scan', [TicketController::class, 'scanPage'])->name('tickets.scan');
-    Route::post('/events/{event}/tickets/scan', [TicketController::class, 'scanValidate'])->name('tickets.scan.validate');
-
-    // Organizer scanner
+    // Scanner (organiser) — primary
     Route::get('/events/{event}/scan',  [TicketController::class, 'scanPage'])->name('tickets.scan.page');
     Route::post('/events/{event}/scan', [TicketController::class, 'scanValidate'])->name('tickets.scan.validate');
 
-    // Organizer: per-event ticket list + PDF export
-    Route::get('/events/{event}/tickets', [TicketController::class, 'eventIndex'])->name('events.tickets.index');
-    Route::get('/events/{event}/tickets/export-pdf', [TicketController::class, 'exportPdf'])->name('events.tickets.export-pdf');
+    // Scanner alias for older links
+    Route::get('/events/{event}/tickets/scan', [TicketController::class, 'scan'])->name('tickets.scan');
+
+    // Check-ins list (organiser)
+    Route::get('/events/{event}/checkins', [CheckinsController::class, 'index'])->name('events.checkins.index');
+
+    // (Optional) organiser: per-event ticket list + export
+    Route::get('/events/{event}/tickets',             [TicketController::class, 'eventIndex'])->name('events.tickets.index');
+    Route::get('/events/{event}/tickets/export-pdf',  [TicketController::class, 'exportPdf'])->name('events.tickets.export-pdf');
 });
 
-// PUBLIC registration + avatar (these don't clash with /events/create)
-Route::get('/events/{event}/ticket', [TicketLookupController::class, 'showForm'])
-    ->name('events.ticket.find');
+/*
+|--------------------------------------------------------------------------
+| Public registration & avatar
+|--------------------------------------------------------------------------
+*/
+Route::get('/events/{event}/ticket',                 [TicketLookupController::class, 'showForm'])->name('events.ticket.find');
+Route::post('/events/{event}/ticket',                [TicketLookupController::class, 'sendLink'])->name('events.ticket.sendlink');
+Route::get('/events/{event}/ticket/manage/{reg}',    [TicketLookupController::class, 'edit'])->name('events.ticket.edit');
+Route::post('/events/{event}/ticket/manage/{reg}',   [TicketLookupController::class, 'update'])->name('events.ticket.update');
 
-Route::post('/events/{event}/ticket', [TicketLookupController::class, 'sendLink'])
-    ->name('events.ticket.sendlink');
+Route::get('/events/{event}/avatar',   [EventController::class, 'avatar'])->name('events.avatar');
+Route::get('/events/{event}/register', [RegistrationController::class, 'create'])->name('events.register.create');
+Route::post('/events/{event}/register',[RegistrationController::class, 'store'])->name('events.register.store');
+Route::get('/events/{event}/register/result', [RegistrationController::class, 'result'])->name('events.register.result');
 
-Route::get('/events/{event}/ticket/manage/{reg}', [TicketLookupController::class, 'edit'])
-    ->name('events.ticket.edit');
-
-Route::post('/events/{event}/ticket/manage/{reg}', [TicketLookupController::class, 'update'])
-    ->name('events.ticket.update');
-
-Route::get('/events/{event}/avatar', [EventController::class, 'avatar'])
-    ->name('events.avatar');
-
-Route::get('/events/{event}/register', [RegistrationController::class, 'create'])
-    ->name('events.register.create');
-
-Route::post('/events/{event}/register', [RegistrationController::class, 'store'])
-    ->name('events.register.store');
-
-Route::get('/events/{event}/register/result', [RegistrationController::class, 'result'])
-    ->name('events.register.result');
-
-
-
-// Sitemap
-Route::get('/sitemap', [SitemapController::class, 'index']);
+/* Sitemap */
+Route::get('/sitemap',     [SitemapController::class, 'index']);
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');
 
-
-// PUBLIC show route — put AFTER resource routes so it doesn't catch /events/create
-// Also guard against the reserved word "create" just in case.
+/* Public event show (after resource routes) */
 Route::get('/events/{event}', [EventController::class, 'show'])
     ->where('event', '^(?!create$).+')
     ->name('events.show');

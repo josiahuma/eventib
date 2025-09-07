@@ -25,7 +25,13 @@ class RegistrantsController extends Controller
         // ✅ Access control: owner OR admin
         abort_unless($isOwner || $isAdmin, 403);
 
-        $isPaidEvent = ($event->ticket_cost ?? 0) > 0;
+        // ── Correct "paid event" detection (categories OR single-price) ─────────────
+        $hasPaidCategories = $event->categories()
+            ->where('is_active', true)
+            ->where('price', '>', 0)
+            ->exists();
+
+        $isPaidEvent = $hasPaidCategories || (($event->ticket_cost ?? 0) > 0);
 
         // ✅ Unlock gate only applies to non-admins on FREE events
         if (!$isAdmin && !$isPaidEvent) {
@@ -40,22 +46,21 @@ class RegistrantsController extends Controller
             }
         }
 
-        // Load registrations:
-        //  - For paid events: only include rows with status=paid
-        //  - For free events: include all (as per original behavior)
+        // ── Load only completed registrations (never canceled/pending) ─────────────
         $event->load([
-            'registrations' => function ($q) use ($isPaidEvent) {
-                if ($isPaidEvent) {
-                    $q->where('status', 'paid');
-                }
+            'registrations' => function ($q) {
+                $q->whereIn('status', ['paid', 'free'])
+                  ->latest();
             },
             'registrations.sessions' => fn ($q) => $q->orderBy('session_date'),
         ]);
 
-        // Sum gross using registration->amount (assumed major units)
-        $sumMinor = $event->registrations->sum(function ($r) {
-            return (int) round(((float) ($r->amount ?? 0)) * 100);
-        });
+        // ── Sum money actually received (PAID rows only) in minor units ───────────
+        $sumMinor = (int) $event->registrations
+            ->where('status', 'paid')
+            ->sum(function ($r) {
+                return (int) round(((float) ($r->amount ?? 0)) * 100);
+            });
 
         // 9.99% commission
         $commissionMinor = intdiv($sumMinor * 999, 10000);
@@ -95,7 +100,6 @@ class RegistrantsController extends Controller
             'currency'            => $currency,
             'symbol'              => $symbol,
             'hasProcessingPayout' => $hasProcessingPayout,
-            // Optional: pass flags in case your Blade wants to show admin-only affordances
             'isAdmin'             => $isAdmin,
             'isOwner'             => $isOwner,
         ]);
@@ -118,8 +122,12 @@ class RegistrantsController extends Controller
         // Only the owner can unlock
         abort_unless($isOwner, 403);
 
-        // Paid events don’t need unlocking
-        if (($event->ticket_cost ?? 0) > 0) {
+        // Paid events don’t need unlocking (use same paid detection as index)
+        $hasPaidCategories = $event->categories()
+            ->where('is_active', true)
+            ->where('price', '>', 0)
+            ->exists();
+        if ($hasPaidCategories || (($event->ticket_cost ?? 0) > 0)) {
             return redirect()->route('events.registrants', $event);
         }
 
@@ -156,7 +164,12 @@ class RegistrantsController extends Controller
         // Only the owner can unlock
         abort_unless($isOwner, 403);
 
-        if (($event->ticket_cost ?? 0) > 0) {
+        // Paid events don’t need unlocking (use same paid detection as index)
+        $hasPaidCategories = $event->categories()
+            ->where('is_active', true)
+            ->where('price', '>', 0)
+            ->exists();
+        if ($hasPaidCategories || (($event->ticket_cost ?? 0) > 0)) {
             return redirect()->route('events.registrants', $event);
         }
 

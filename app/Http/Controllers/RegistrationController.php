@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Mail\RegistrationConfirmedMail;
 use App\Mail\NewRegistrationNotificationMail;
+use App\Mail\RegistrationConfirmedMail;
 use App\Models\Event;
 use App\Models\EventRegistration;
+use App\Models\EventRegistrationItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
@@ -13,21 +14,47 @@ use Stripe\StripeClient;
 
 class RegistrationController extends Controller
 {
-    // Show the registration form
     public function create(Event $event)
     {
-         if ($event->is_disabled) {
-            return redirect()->route('home')->with('error', 'This event is unavailable.');
+        // Load relations used by the form
+        $event->load([
+            'sessions',
+            'categories' => fn ($q) => $q->where('is_active', true)->orderBy('sort')->orderBy('id'),
+        ]);
+
+        // Determine pricing type from active categories
+        $isPaidEvent = $event->categories()->exists();
+
+        // Only flag duplicates for FREE events (not paid categories)
+        $alreadyRegistered = false;
+        if (! $isPaidEvent) {
+            $alreadyRegistered = EventRegistration::query()
+                ->where('event_id', $event->id)
+                ->whereNotIn('status', ['canceled', 'cancelled', 'failed'])
+                ->where(function ($q) {
+                    if (Auth::check()) {
+                        $q->where('user_id', Auth::id());
+                    }
+                    if (Auth::user()?->email) {
+                        $q->orWhere('email', Auth::user()->email);
+                    }
+                })
+                ->exists();
         }
-        
-        $event->load(['sessions' => fn ($q) => $q->orderBy('session_date', 'asc')]);
-        return view('events.register', compact('event'));
+
+        return view('events.register', [
+            'event'             => $event,
+            'isPaidEvent'       => $isPaidEvent,
+            'alreadyRegistered' => $alreadyRegistered,
+        ]);
     }
 
-    // Handle registration (free or paid → Stripe)
     public function store(Request $request, Event $event)
     {
-        $event->load('sessions');
+        $event->load([
+            'sessions',
+            'categories' => fn ($q) => $q->where('is_active', true)->orderBy('sort')->orderBy('id'),
+        ]);
 
         $baseRules = [
             'name'          => 'required|string|max:255',
@@ -37,76 +64,238 @@ class RegistrationController extends Controller
             'session_ids.*' => 'integer|exists:event_sessions,id',
         ];
 
-        $isPaid = ($event->ticket_cost ?? 0) > 0;
+        $hasCategories = $event->categories->count() > 0;
+        $isSinglePaid  = !$hasCategories && (($event->ticket_cost ?? 0) > 0);
 
-        $extraRules = $isPaid
-            ? ['quantity' => 'required|integer|min:1|max:10']
-            : [
-                'party_adults'   => 'nullable|integer|min:0|max:20',
-                'party_children' => 'nullable|integer|min:0|max:20',
-            ];
+        $extraRules = $hasCategories
+            ? ['categories' => 'required|array'] // categories[catId] => qty
+            : ($isSinglePaid
+                ? ['quantity' => 'required|integer|min:1|max:10']
+                : [
+                    'party_adults'   => 'nullable|integer|min:0|max:20',
+                    'party_children' => 'nullable|integer|min:0|max:20',
+                ]);
 
         $validated = $request->validate($baseRules + $extraRules);
 
-        // sessions must belong to this event
+        // Validate sessions belong to this event
         $validSessionIds = $event->sessions()
             ->whereIn('id', $validated['session_ids'])
             ->pluck('id')->all();
 
         if (!$validSessionIds) {
-            return back()->withErrors(['session_ids' => 'Please select at least one valid session for this event.'])->withInput();
+            return back()
+                ->withErrors(['session_ids' => 'Please select at least one valid session for this event.'])
+                ->withInput();
         }
 
-        // ---- Only block if user already COMPLETED (paid or free)
-        $completedExists = EventRegistration::where('event_id', $event->id)
-            ->whereIn('status', ['paid', 'free'])
-            ->where(function ($q) use ($validated) {
-                if (Auth::check()) $q->orWhere('user_id', Auth::id());
-                $q->orWhere('email', $validated['email']);
-            })
-            ->exists();
+        $currency = strtolower($event->ticket_currency ?? 'gbp');
 
-        if ($completedExists) {
-            return back()->withErrors(['email' => 'You are already registered for this event.'])->withInput();
+        /* ============================
+         |   CATEGORIES PRICING FLOW  |
+         ============================ */
+        if ($hasCategories) {
+            // Build selected line items
+            $selected = collect($request->input('categories', []))
+                ->map(fn ($qty, $id) => ['id' => (int) $id, 'qty' => max(0, (int) $qty)])
+                ->filter(fn ($r) => $r['qty'] > 0);
+
+            $lines = collect();
+            foreach ($selected as $s) {
+                $cat = $event->categories->firstWhere('id', $s['id']);
+                if (!$cat) continue;
+
+                $lines->push([
+                    'category'      => $cat,
+                    'snapshot_name' => $cat->name,
+                    'unit_price'    => (float) $cat->price,
+                    'quantity'      => $s['qty'],
+                    'line_total'    => round(((float) $cat->price) * $s['qty'], 2),
+                ]);
+            }
+
+            if ($lines->isEmpty()) {
+                return back()
+                    ->withErrors(['categories' => 'Please select at least one ticket.'])
+                    ->withInput();
+            }
+
+            $totalQty   = (int) $lines->sum('quantity');
+            $totalMajor = (float) $lines->sum('line_total');
+
+            // ❗ Duplicate gate ONLY if this is effectively a FREE registration (total = 0)
+            if ($totalMajor <= 0) {
+                $existsFree = EventRegistration::where('event_id', $event->id)
+                    ->whereNotIn('status', ['canceled', 'cancelled', 'failed'])
+                    ->where(function ($q) use ($validated) {
+                        if (Auth::check()) $q->orWhere('user_id', Auth::id());
+                        $q->orWhere('email', $validated['email']);
+                    })
+                    ->exists();
+
+                if ($existsFree) {
+                    return back()
+                        ->withErrors(['email' => 'You are already registered for this free event.'])
+                        ->withInput();
+                }
+            }
+
+            // Reuse pending draft if any; otherwise create a new one
+            $registration = EventRegistration::where('event_id', $event->id)
+                ->where('status', 'pending')
+                ->where(function ($q) use ($validated) {
+                    if (Auth::check()) $q->orWhere('user_id', Auth::id());
+                    $q->orWhere('email', $validated['email']);
+                })
+                ->latest('id')->first();
+
+            if ($registration) {
+                $registration->fill([
+                    'name'     => $validated['name'],
+                    'email'    => $validated['email'],
+                    'mobile'   => $validated['mobile'] ?? null,
+                    'status'   => $totalMajor > 0 ? 'pending' : 'free',
+                    'amount'   => $totalMajor,
+                    'currency' => $currency,
+                    'quantity' => $totalQty,
+                ])->save();
+                $registration->items()->delete();
+            } else {
+                $registration = EventRegistration::create([
+                    'event_id' => $event->id,
+                    'user_id'  => Auth::id(),
+                    'name'     => $validated['name'],
+                    'email'    => $validated['email'],
+                    'mobile'   => $validated['mobile'] ?? null,
+                    'status'   => $totalMajor > 0 ? 'pending' : 'free',
+                    'amount'   => $totalMajor,
+                    'currency' => $currency,
+                    'quantity' => $totalQty,
+                ]);
+            }
+
+            foreach ($lines as $ln) {
+                EventRegistrationItem::create([
+                    'event_registration_id'    => $registration->id,
+                    'event_ticket_category_id' => $ln['category']->id,
+                    'snapshot_name'            => $ln['snapshot_name'],
+                    'unit_price'               => $ln['unit_price'],
+                    'quantity'                 => $ln['quantity'],
+                    'line_total'               => $ln['line_total'],
+                ]);
+            }
+
+            $registration->sessions()->sync($validSessionIds);
+
+            // FREE categories selection -> confirm immediately
+            if ($totalMajor <= 0) {
+                if ($event->user?->email) {
+                    Mail::to($event->user->email)->send(new NewRegistrationNotificationMail($event, $registration));
+                }
+                Mail::to($registration->email)->send(new RegistrationConfirmedMail($event, $registration));
+                return redirect()->to(route('events.register.result', ['event' => $event, 'registered' => 1]));
+            }
+
+            // PAID categories -> Stripe
+            $stripe = new StripeClient(config('services.stripe.secret'));
+            $lineItems = $lines->map(function ($ln) use ($currency) {
+                return [
+                    'price_data' => [
+                        'currency'     => $currency,
+                        'product_data' => ['name' => $ln['snapshot_name']],
+                        'unit_amount'  => (int) round($ln['unit_price'] * 100),
+                    ],
+                    'quantity' => $ln['quantity'],
+                ];
+            })->values()->all();
+
+            $session = $stripe->checkout->sessions->create([
+                'mode'                  => 'payment',
+                'payment_method_types'  => ['card'],
+                'line_items'            => $lineItems,
+                'success_url'           => route('events.register.result', ['event' => $event, 'paid' => 1]).'&session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url'            => route('events.register.result', ['event' => $event, 'canceled' => 1]).'&session_id={CHECKOUT_SESSION_ID}',
+                'metadata'              => [
+                    'purpose'         => 'event_registration',
+                    'event_id'        => (string) $event->id,
+                    'registration_id' => (string) $registration->id,
+                    'session_ids'     => implode(',', $validSessionIds),
+                    'email'           => $validated['email'],
+                    'name'            => $validated['name'],
+                    'user_id'         => (string) (Auth::id() ?? ''),
+                    'quantity'        => (string) $totalQty,
+                ],
+            ]);
+
+            $registration->update(['stripe_session_id' => $session->id]);
+            return redirect()->away($session->url);
         }
 
-        // We'll reuse a PENDING row (if any) so retries don’t create duplicates
+        /* ==============================
+         |   LEGACY SINGLE-PRICE FLOW   |
+         |   (paid can re-order; free = one) 
+         ============================== */
+        $isPaid = ($event->ticket_cost ?? 0) > 0;
+
+        $request->validate(
+            $isPaid
+                ? ['quantity' => 'required|integer|min:1|max:10']
+                : [
+                    'party_adults'   => 'nullable|integer|min:0|max:20',
+                    'party_children' => 'nullable|integer|min:0|max:20',
+                ]
+        );
+
+        // Duplicate gate ONLY for free single-price events
+        if (! $isPaid) {
+            $existsFree = EventRegistration::where('event_id', $event->id)
+                ->whereNotIn('status', ['canceled', 'cancelled', 'failed'])
+                ->where(function ($q) use ($request) {
+                    if (Auth::check()) $q->orWhere('user_id', Auth::id());
+                    $q->orWhere('email', $request->input('email'));
+                })
+                ->exists();
+
+            if ($existsFree) {
+                return back()
+                    ->withErrors(['email' => 'You are already registered for this free event.'])
+                    ->withInput();
+            }
+        }
+
+        $quantity      = $isPaid ? (int) $request->input('quantity') : 1;
+        $partyAdults   = $isPaid ? 0 : (int) ($request->input('party_adults') ?? 0);
+        $partyChildren = $isPaid ? 0 : (int) ($request->input('party_children') ?? 0);
+
         $registration = EventRegistration::where('event_id', $event->id)
             ->where('status', 'pending')
-            ->where(function ($q) use ($validated) {
+            ->where(function ($q) use ($request) {
                 if (Auth::check()) $q->orWhere('user_id', Auth::id());
-                $q->orWhere('email', $validated['email']);
+                $q->orWhere('email', $request->input('email'));
             })
-            ->latest('id')
-            ->first();
-
-        $quantity      = $isPaid ? (int) $validated['quantity'] : 1;
-        $partyAdults   = $isPaid ? 0 : (int) ($validated['party_adults'] ?? 0);
-        $partyChildren = $isPaid ? 0 : (int) ($validated['party_children'] ?? 0);
-        $currency      = strtolower($event->ticket_currency ?? 'gbp');
+            ->latest('id')->first();
 
         if ($registration) {
-            // reuse the same row
             $registration->fill([
-                'name'           => $validated['name'],
-                'email'          => $validated['email'],
-                'mobile'         => $validated['mobile'] ?? null,
+                'name'           => $request->input('name'),
+                'email'          => $request->input('email'),
+                'mobile'         => $request->input('mobile') ?? null,
                 'quantity'       => $quantity,
                 'party_adults'   => $partyAdults,
                 'party_children' => $partyChildren,
                 'currency'       => $currency,
-                // keep status=pending until Stripe says paid
+                'amount'         => $isPaid ? (($event->ticket_cost ?? 0) * $quantity) : 0,
+                'status'         => $isPaid ? 'pending' : 'free',
             ])->save();
         } else {
-            // create a fresh row (free → free, paid → pending)
             $registration = EventRegistration::create([
                 'event_id'       => $event->id,
                 'user_id'        => Auth::id(),
-                'name'           => $validated['name'],
-                'email'          => $validated['email'],
-                'mobile'         => $validated['mobile'] ?? null,
+                'name'           => $request->input('name'),
+                'email'          => $request->input('email'),
+                'mobile'         => $request->input('mobile') ?? null,
                 'status'         => $isPaid ? 'pending' : 'free',
-                'amount'         => $isPaid ? (($event->ticket_cost ?? 0) * $quantity) : 0, // major units
+                'amount'         => $isPaid ? (($event->ticket_cost ?? 0) * $quantity) : 0,
                 'currency'       => $currency,
                 'quantity'       => $quantity,
                 'party_adults'   => $partyAdults,
@@ -116,76 +305,68 @@ class RegistrationController extends Controller
 
         $registration->sessions()->sync($validSessionIds);
 
-        // Organizer email: only for FREE (completed) – NOT for pending paid attempts
-        if (! $isPaid && $event->user?->email) {
-            \Mail::to($event->user->email)->send(new \App\Mail\NewRegistrationNotificationMail($event, $registration));
-        }
-
-        // FREE → done
         if (! $isPaid) {
-            \Mail::to($registration->email)->send(new \App\Mail\RegistrationConfirmedMail($event, $registration));
+            if ($event->user?->email) {
+                Mail::to($event->user->email)->send(new NewRegistrationNotificationMail($event, $registration));
+            }
+            Mail::to($registration->email)->send(new RegistrationConfirmedMail($event, $registration));
             return redirect()->to(route('events.register.result', ['event' => $event, 'registered' => 1]));
         }
 
-        // PAID → Stripe Checkout
-        $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
-
+        $stripe = new StripeClient(config('services.stripe.secret'));
         $session = $stripe->checkout->sessions->create([
-            'mode' => 'payment',
+            'mode'                 => 'payment',
             'payment_method_types' => ['card'],
-            'line_items' => [[
+            'line_items'           => [[
                 'price_data' => [
-                    'currency' => $currency,
-                    'product_data' => ['name' => $event->name],
-                    'unit_amount' => (int) round(($event->ticket_cost ?? 0) * 100),
+                    'currency'     => $currency,
+                    'product_data'  => ['name' => $event->name],
+                    'unit_amount'   => (int) round(($event->ticket_cost ?? 0) * 100),
                 ],
                 'quantity' => $quantity,
             ]],
-            // include session id on BOTH urls so we can mark canceled
             'success_url' => route('events.register.result', ['event' => $event, 'paid' => 1]).'&session_id={CHECKOUT_SESSION_ID}',
             'cancel_url'  => route('events.register.result', ['event' => $event, 'canceled' => 1]).'&session_id={CHECKOUT_SESSION_ID}',
-            'metadata' => [
+            'metadata'    => [
                 'event_id'        => (string) $event->id,
                 'registration_id' => (string) $registration->id,
                 'session_ids'     => implode(',', $validSessionIds),
-                'email'           => $validated['email'],
-                'name'            => $validated['name'],
+                'email'           => $request->input('email'),
+                'name'            => $request->input('name'),
                 'user_id'         => (string) (Auth::id() ?? ''),
                 'quantity'        => (string) $quantity,
             ],
         ]);
 
         $registration->update(['stripe_session_id' => $session->id]);
-
         return redirect()->away($session->url);
     }
 
-
-
-    // NEW: Result page (success/cancel/errors)
     public function result(Request $request, Event $event)
     {
-        $event->load('sessions');
-
-        $state = 'info';     // success | error | warning | info
-        $title = 'Registration';
-        $message = null;
-
-        // 1) Canceled
+        // Cancelled -> mark pending draft as canceled and bounce back to the form
         if ($request->boolean('canceled')) {
             if ($request->filled('session_id')) {
                 EventRegistration::where('stripe_session_id', $request->query('session_id'))
                     ->where('event_id', $event->id)
                     ->update(['status' => 'canceled']);
             }
-            $state = 'warning';
-            $title = 'Checkout cancelled';
-            $message = 'No payment was taken. You can try again when ready.';
-            return view('events.register-result', compact('event', 'state', 'title', 'message'));
+
+            return redirect()
+                ->route('events.register', $event)
+                ->with('warning', 'Checkout cancelled. No payment was taken.');
         }
 
+        // Ensure categories render on the result page too
+        $event->load([
+            'sessions',
+            'categories' => fn ($q) => $q->where('is_active', true)->orderBy('sort')->orderBy('id'),
+        ]);
 
-        // 2) Free registration success
+        $state = 'info';
+        $title = 'Registration';
+        $message = null;
+
         if ($request->boolean('registered')) {
             $state = 'success';
             $title = 'You’re registered! 🎉';
@@ -193,86 +374,90 @@ class RegistrationController extends Controller
             return view('events.register-result', compact('event', 'state', 'title', 'message'));
         }
 
-        // 3) Paid registration – verify Stripe session if present
         if ($request->boolean('paid') && $request->filled('session_id')) {
             try {
-                $stripe  = new StripeClient(config('services.stripe.secret'));
+                $stripe  = new \Stripe\StripeClient(config('services.stripe.secret'));
                 $session = $stripe->checkout->sessions->retrieve($request->query('session_id'), []);
 
                 if ($session && $session->payment_status === 'paid') {
-                    // Convert Stripe amount_total (minor units) to major using correct exponent
                     $sessionCurrency = strtolower((string) ($session->currency ?? 'gbp'));
                     $exp             = $this->currencyExponent($sessionCurrency);
                     $amountMajor     = ($session->amount_total ?? 0) / (10 ** $exp);
 
+                    // Find the registration for this session
+                    $reg = EventRegistration::where('stripe_session_id', $session->id)
+                        ->where('event_id', $event->id)
+                        ->first();
+
+                    // Keep track so we don't email twice on refresh
+                    $alreadyPaid = $reg && $reg->status === 'paid';
+
+                    // Persist status/amount/currency
                     EventRegistration::where('stripe_session_id', $session->id)
+                        ->where('event_id', $event->id)
                         ->update([
                             'status'   => 'paid',
-                            'amount'   => $amountMajor,       // major units
+                            'amount'   => $amountMajor,
                             'currency' => $sessionCurrency,
                         ]);
 
-                    $state = 'success';
-                    $title = 'Payment successful 🎉';
+                    // Re-load if we didn't have it
+                    if (! $reg) {
+                        $reg = EventRegistration::where('stripe_session_id', $session->id)
+                            ->where('event_id', $event->id)
+                            ->first();
+                    }
+
+                    // 🔔 Send emails ONCE (organizer + attendee)
+                    if ($reg && ! $alreadyPaid) {
+                        try {
+                            if ($event->user?->email) {
+                                Mail::to($event->user->email)
+                                    ->send(new NewRegistrationNotificationMail($event, $reg));
+                            }
+                            Mail::to($reg->email)
+                                ->send(new RegistrationConfirmedMail($event, $reg));
+                        } catch (\Throwable $mailErr) {
+                            // Optional: log mail errors, but don't fail the success page
+                            \Log::warning('Registration paid mail failed', [
+                                'event_id' => $event->id,
+                                'reg_id'   => $reg->id ?? null,
+                                'err'      => $mailErr->getMessage(),
+                            ]);
+                        }
+                    }
+
+                    $state   = 'success';
+                    $title   = 'Payment successful 🎉';
                     $message = 'Your registration is confirmed.';
                 } else {
-                    $state = 'error';
-                    $title = 'We couldn’t verify your payment';
+                    $state   = 'error';
+                    $title   = 'We couldn’t verify your payment';
                     $message = 'If you saw a Stripe success screen, you should be registered. Otherwise, please try again.';
                 }
             } catch (\Throwable $e) {
-                $state = 'error';
-                $title = 'We couldn’t verify your payment';
+                \Log::error('Stripe verify error', ['err' => $e->getMessage()]);
+                $state   = 'error';
+                $title   = 'We couldn’t verify your payment';
                 $message = 'Please refresh in a moment or contact support if you were charged.';
             }
 
             return view('events.register-result', compact('event', 'state', 'title', 'message'));
         }
 
-        // 4) Fallback
-        $state = 'info';
-        $title = 'Status not clear';
+        $state   = 'info';
+        $title   = 'Status not clear';
         $message = 'If you just completed checkout, please refresh in a moment.';
         return view('events.register-result', compact('event', 'state', 'title', 'message'));
     }
 
-    /**
-     * Normalize currency code to 3-letter lowercase (defaults to gbp).
-     */
-    private function normalizeCurrency(?string $code): string
-    {
-        $c = strtolower(trim((string) $code));
-        // basic sanity: ensure 3 letters; fallback to gbp
-        if (!preg_match('/^[a-z]{3}$/', $c)) {
-            return 'gbp';
-        }
-        return $c;
-    }
-
-    /**
-     * Return the number of decimal places (exponent) for a currency.
-     * Handles zero-decimal and 3-decimal currencies; default is 2.
-     */
     private function currencyExponent(string $currency): int
     {
         $c = strtolower($currency);
-
-        // ISO currencies with 0 decimals on Stripe
-        $zero = [
-            'bif','clp','djf','gnf','jpy','kmf','krw','mga',
-            'pyg','rwf','ugx','vnd','vuv','xaf','xof','xpf',
-        ];
-        if (in_array($c, $zero, true)) {
-            return 0;
-        }
-
-        // Rare 3-decimal currencies
+        $zero  = ['bif','clp','djf','gnf','jpy','kmf','krw','mga','pyg','rwf','ugx','vnd','vuv','xaf','xof','xpf'];
+        if (in_array($c, $zero, true)) return 0;
         $three = ['bhd','jod','kwd','omr','tnd'];
-        if (in_array($c, $three, true)) {
-            return 3;
-        }
-
-        // Default (most currencies)
+        if (in_array($c, $three, true)) return 3;
         return 2;
     }
 }

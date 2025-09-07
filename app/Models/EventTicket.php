@@ -32,4 +32,9 @@ class EventTicket extends Model
     {
         return strtoupper(base_convert($registrationId, 10, 36)).'-'.str_pad((string)($idx+1), 3, '0', STR_PAD_LEFT);
     }
+
+    public function items()
+    {
+        return $this->hasMany(\App\Models\EventRegistrationItem::class);
+    }
 }

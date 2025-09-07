@@ -13,17 +13,31 @@
             ? asset('storage/' . $event->banner_url)
             : ($event->avatar_url ? asset('storage/' . $event->avatar_url) : null);
 
-        $isFree = ($event->ticket_cost ?? 0) == 0;
+        // Currency + symbol
         $cur = strtoupper($event->ticket_currency ?? 'GBP');
         $symbols = [
-            'GBP' => '£','USD' => '$','EUR' => '€','NGN' => '₦','KES' => 'KSh',
-            'GHS' => '₵','ZAR' => 'R','CAD' => '$','AUD' => '$','NZD' => '$',
-            'INR' => '₹','JPY' => '¥','CNY' => '¥'
+            'GBP'=>'£','USD'=>'$','EUR'=>'€','NGN'=>'₦','KES'=>'KSh','GHS'=>'₵','ZAR'=>'R',
+            'CAD'=>'$','AUD'=>'$','NZD'=>'$','INR'=>'₹','JPY'=>'¥','CNY'=>'¥'
         ];
         $sym = $symbols[$cur] ?? '';
-        $priceLabel = $isFree
-            ? 'Free'
-            : ($sym ? $sym.number_format($event->ticket_cost, 2) : $cur.' '.number_format($event->ticket_cost, 2));
+
+        // ---- PRICE LABEL (use categories if present, otherwise Free) ----
+        // Controller passes $activeCats, $minPrice, $maxPrice
+        $hasCats = isset($activeCats) && $activeCats->count() > 0;
+        if ($hasCats) {
+            $min = isset($minPrice) ? (float)$minPrice : (float)$activeCats->min('price');
+            $max = isset($maxPrice) ? (float)$maxPrice : (float)$activeCats->max('price');
+            $priceLabel = ($min === $max)
+                ? ($sym ? $sym.number_format($min, 2) : ($cur . ' ' . number_format($min, 2)))
+                : (($sym ? $sym.number_format($min, 2) : ($cur . ' ' . number_format($min, 2)))
+                   . '–' .
+                   ($sym ? $sym.number_format($max, 2) : ($cur . ' ' . number_format($max, 2))));
+        } else {
+            $priceLabel = 'Free';
+        }
+        $isFree = !$hasCats;
+
+        // Tags
         $tags = is_array($event->tags) ? $event->tags : (json_decode($event->tags ?? '[]', true) ?: []);
 
         // --- Countdown target: next upcoming session (if any) ---
@@ -113,25 +127,18 @@
                             aria-label="Countdown to event start"
                         >
                             <div class="grid grid-cols-4 sm:grid-cols-4 gap-2 sm:gap-3 max-w-xl">
-                                <!-- Days -->
                                 <div class="flex flex-col items-center justify-center border border-gray-300 bg-white px-4 py-3 shadow-sm rounded-none">
                                     <span class="text-[10px] sm:text-xs tracking-widest uppercase text-gray-500">Days</span>
                                     <span class="mt-1 text-2xl sm:text-3xl font-bold tabular-nums leading-none" x-text="dd"></span>
                                 </div>
-
-                                <!-- Hours -->
                                 <div class="flex flex-col items-center justify-center border border-gray-300 bg-white px-4 py-3 shadow-sm rounded-none">
                                     <span class="text-[10px] sm:text-xs tracking-widest uppercase text-gray-500">Hours</span>
                                     <span class="mt-1 text-2xl sm:text-3xl font-bold tabular-nums leading-none" x-text="hh"></span>
                                 </div>
-
-                                <!-- Minutes -->
                                 <div class="flex flex-col items-center justify-center border border-gray-300 bg-white px-4 py-3 shadow-sm rounded-none">
                                     <span class="text-[10px] sm:text-xs tracking-widest uppercase text-gray-500">Minutes</span>
                                     <span class="mt-1 text-2xl sm:text-3xl font-bold tabular-nums leading-none" x-text="mm"></span>
                                 </div>
-
-                                <!-- Seconds -->
                                 <div class="flex flex-col items-center justify-center border border-gray-300 bg-white px-4 py-3 shadow-sm rounded-none">
                                     <span class="text-[10px] sm:text-xs tracking-widest uppercase text-gray-500">Seconds</span>
                                     <span class="mt-1 text-2xl sm:text-3xl font-bold tabular-nums leading-none" x-text="ss"></span>
@@ -139,7 +146,6 @@
                             </div>
                         </div>
                     @endif
-
 
                     <div class="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-600">
                         @if ($event->organizer)
@@ -236,28 +242,30 @@
 
                         {{-- Register / Manage buttons --}}
                         @if ($hasUpcoming)
-                            <a href="{{ route('events.register.create', $event) }}"
-                            class="mt-5 w-full inline-flex justify-center items-center px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 transition">
+                            <a href="{{ route('events.register', $event) }}"
+                               class="mt-4 inline-flex items-center justify-center w-full rounded-lg bg-indigo-600 text-white px-4 py-2.5 hover:bg-indigo-700">
                                 Register
                             </a>
                         @else
-                            <span class="mt-5 w-full inline-flex justify-center items-center px-4 py-2.5 rounded-xl bg-gray-100 text-gray-400 font-medium cursor-not-allowed select-none">
+                            <span class="mt-4 w-full inline-flex justify-center items-center px-4 py-2.5 rounded-xl bg-gray-100 text-gray-400 font-medium cursor-not-allowed select-none">
                                 Registration closed
                             </span>
                         @endif
+
                         @php
                             $manageUrl = auth()->check()
                                 ? route('my.tickets')
                                 : route('events.ticket.find', $event);
                         @endphp
+
                         @auth
                             <a href="{{ route('my.tickets') }}"
                                class="mt-2 w-full inline-flex justify-center items-center px-4 py-2.5 rounded-xl bg-green-600 text-white font-medium hover:bg-green-700 transition">
                                 Manage my tickets
                             </a>
                         @else
-                             <a href="{{ $manageUrl }}"
-                                class="mt-3 w-full inline-flex justify-center items-center px-4 py-2.5 rounded-xl bg-green-600 text-white font-medium hover:bg-green-700 transition">
+                            <a href="{{ $manageUrl }}"
+                               class="mt-3 w-full inline-flex justify-center items-center px-4 py-2.5 rounded-xl bg-green-600 text-white font-medium hover:bg-green-700 transition">
                                 Already registered? Manage your booking
                             </a>
                         @endauth
@@ -305,10 +313,7 @@
                 target: new Date(iso).getTime(),
                 dd: '0', hh: '00', mm: '00', ss: '00',
                 timer: null,
-                start() {
-                    this.tick();
-                    this.timer = setInterval(() => this.tick(), 1000);
-                },
+                start() { this.tick(); this.timer = setInterval(() => this.tick(), 1000); },
                 tick() {
                     const diff = Math.max(0, this.target - Date.now());
                     const d = Math.floor(diff / 86400000);

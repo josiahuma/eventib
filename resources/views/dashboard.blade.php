@@ -56,17 +56,38 @@
                             @endif
 
                             @php
-                                $isFree = ($event->ticket_cost ?? 0) == 0;
+                                // Active categories and paid detection
+                                $activeCats = $event->relationLoaded('categories')
+                                    ? $event->categories->where('is_active', true)
+                                    : collect();
+
+                                $paidCats = $activeCats->filter(fn($c) => (float) $c->price > 0);
+                                $hasPaidCategories = $paidCats->isNotEmpty();
+
+                                $isPaidSingle = (float) ($event->ticket_cost ?? 0) > 0;
+                                $isPaidEvent  = $hasPaidCategories || $isPaidSingle;
+                                $isFree       = ! $isPaidEvent;
+
                                 $cur = strtoupper($event->ticket_currency ?? 'GBP');
                                 $symbols = [
                                     'GBP'=>'£','USD'=>'$','EUR'=>'€','NGN'=>'₦','KES'=>'KSh','GHS'=>'₵','ZAR'=>'R',
                                     'CAD'=>'$','AUD'=>'$','NZD'=>'$','INR'=>'₹','JPY'=>'¥','CNY'=>'¥'
                                 ];
                                 $sym = $symbols[$cur] ?? '';
-                                $priceLabel = $isFree
-                                    ? 'Free'
-                                    : ($sym ? $sym.number_format($event->ticket_cost, 2) : $cur.' '.number_format($event->ticket_cost, 2));
+
+                                if ($hasPaidCategories) {
+                                    $min = (float) $paidCats->min('price');
+                                    $max = (float) $paidCats->max('price');
+                                    $fmt = fn($v) => $sym ? ($sym . number_format($v, 2)) : ($cur . ' ' . number_format($v, 2));
+                                    $priceLabel = ($min === $max) ? $fmt($min) : ($fmt($min) . '–' . $fmt($max));
+                                } elseif ($isPaidSingle) {
+                                    $priceLabel = $sym ? $sym . number_format($event->ticket_cost, 2)
+                                                    : $cur . ' ' . number_format($event->ticket_cost, 2);
+                                } else {
+                                    $priceLabel = 'Free';
+                                }
                             @endphp
+
 
                             <span class="absolute top-3 right-3 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold
                                 {{ $isFree ? 'bg-emerald-500 text-white' : 'bg-black/80 text-white' }}">
@@ -84,33 +105,24 @@
                                 </div>
                                 <div class="text-right">
                                     @php
-                                        // define per-card
-                                        $isPaidEvent = ! $isFree;
-
-                                        // collection-safe
-                                        $regs = $event->registrations ?? collect();
+                                        // Use the eager-loaded, status-filtered relation
+                                        $regs = $event->relationLoaded('registrations') ? $event->registrations : collect();
 
                                         if ($isPaidEvent) {
-                                            // only count completed/paid tickets
-                                            $completed = $regs->filter(function ($r) {
-                                                $s = strtolower((string)($r->status ?? ''));
-                                                return in_array($s, ['paid','complete','completed','succeeded'], true);
-                                            });
-
-                                            $totalUnits = $completed->sum(function ($r) {
-                                                return max(1, (int)($r->quantity ?? 1));
-                                            });
-                                            $unitLabel = 'tickets';
+                                            // Count tickets (quantities) for completed rows
+                                            $totalUnits = $regs->sum(fn ($r) => max(1, (int) ($r->quantity ?? 1)));
+                                            $unitLabel  = 'tickets';
                                         } else {
-                                            // free events: count total attendees (registrant + guests)
+                                            // Free events: count total attendees = registrant + guests
                                             $totalUnits = $regs->sum(function ($r) {
-                                                $ad = max(0, (int)($r->party_adults ?? 0));
-                                                $ch = max(0, (int)($r->party_children ?? 0));
+                                                $ad = max(0, (int) ($r->party_adults ?? 0));
+                                                $ch = max(0, (int) ($r->party_children ?? 0));
                                                 return 1 + $ad + $ch;
                                             });
                                             $unitLabel = 'attendees';
                                         }
                                     @endphp
+
 
                                     <div class="text-xs text-gray-500">Registrations</div>
                                     <div class="text-sm font-semibold text-gray-900">

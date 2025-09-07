@@ -48,4 +48,9 @@ class EventRegistration extends Model
 
     public function checker()      { return $this->belongsTo(User::class, 'checked_in_by'); }
 
+    public function items()
+    {
+        return $this->hasMany(\App\Models\EventRegistrationItem::class);
+    }
+
 }

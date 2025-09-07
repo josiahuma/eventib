@@ -85,4 +85,23 @@ class Event extends Model
     {
         return max(0, $this->netPaidMinor() - $this->deductedPayoutMinor());
     }
+
+    public function categories()
+    {
+        return $this->hasMany(\App\Models\EventTicketCategory::class)->orderBy('sort')->orderBy('id');
+    }
+
+    // Only completed attendees (free or paid)
+    public function attendees()
+    {
+        return $this->hasMany(\App\Models\EventRegistration::class)
+            ->whereIn('status', ['paid', 'free']);
+    }
+
+    // Convenience: money actually received (paid only)
+    public function paidAmount()
+    {
+        return (float) $this->attendees()->where('status', 'paid')->sum('amount');
+    }
+
 }

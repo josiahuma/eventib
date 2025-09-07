@@ -1,3 +1,4 @@
+{{-- resources/views/events/edit.blade.php --}}
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between">
@@ -9,7 +10,7 @@
     </x-slot>
 
     @php
-        // Normalize tags to array for the multiselect
+        // Tags -> array (for multiselect)
         $raw = $event->tags;
         if (is_array($raw)) {
             $tags = $raw;
@@ -22,12 +23,13 @@
             $tags = [];
         }
 
+        // Static categories for select
         $cats = [
-            'Arts','Business','Charity','Community','Education','Entertainment','Food & Drink',
-            'Fashion','Health','Music','Religion','Sports','Technology','Travel'
+            'Arts','Business','Charity','Community','Education','Entertainment',
+            'Food & Drink','Fashion','Health','Music','Religion','Sports','Technology','Travel'
         ];
 
-        // Compact list of the current user’s payout methods using ONLY columns your table has
+        // Payout methods (compact)
         $rawMethods = auth()->user()
             ? auth()->user()->payoutMethods()
                 ->select(['id','type','country','paypal_email','account_name','account_number'])
@@ -35,11 +37,10 @@
                 ->map(function ($m) {
                     $isBank = $m->type === 'bank';
                     $last4  = $isBank ? substr(preg_replace('/\D+/', '', (string) $m->account_number), -4) : null;
-
                     return [
                         'id'      => $m->id,
-                        'type'    => $m->type,                       // 'bank' | 'paypal'
-                        'country' => strtoupper($m->country ?? ''),  // 'GB', 'US', ...
+                        'type'    => $m->type,                        // 'bank' | 'paypal'
+                        'country' => strtoupper($m->country ?? ''),   // ISO2
                         'label'   => $isBank ? ($m->account_name ?: 'Bank account') : ($m->paypal_email ?: 'PayPal'),
                         'last4'   => $last4,
                         'email'   => $m->paypal_email,
@@ -48,9 +49,19 @@
                 ->values()
             : collect();
 
-        $initialCost     = old('ticket_cost', $event->ticket_cost); // keep numeric value
+        // Ticket categories (existing)
+        $catsExisting = method_exists($event, 'categories')
+            ? $event->categories()->orderBy('sort')->orderBy('id')->get()
+            : collect();
+
+        // "Paid" if any ACTIVE category has price > 0 (fallback to single cost only for ancient events)
+        $hasPaidCats     = $catsExisting->where('is_active', true)->filter(fn ($c) => (float)$c->price > 0)->isNotEmpty();
+        $initialPaid     = $hasPaidCats || ((float)($event->ticket_cost ?? 0) > 0);
         $initialCurrency = old('ticket_currency', $event->ticket_currency ?: 'GBP');
-        $initialPaid     = (float)$initialCost > 0;
+
+        // Sessions for edit
+        $existingSessions = $event->sessions()->orderBy('session_date')->get();
+        $existingCount    = $existingSessions->count();
     @endphp
 
     <div
@@ -58,7 +69,6 @@
             methods: @js($rawMethods),
             defaultCurrency: '{{ $initialCurrency }}',
             defaultPaid: {{ $initialPaid ? 'true' : 'false' }},
-            defaultCost: '{{ $initialCost !== null ? $initialCost : '' }}',
             profilePayoutUrl: '{{ route('profile.payouts') }}'
         })"
         class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
@@ -93,49 +103,167 @@
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-gray-900">Pricing</h3>
 
-                    <div class="mt-4 flex flex-wrap gap-4">
+                    <div class="mt-4 flex flex-wrap gap-6">
                         <label class="inline-flex items-center gap-2">
-                            <input type="radio" class="text-indigo-600 border-gray-300"
-                                   value="free" x-model="pricing">
+                            <input type="radio" class="text-indigo-600 border-gray-300" value="free" x-model="pricing" name="pricing">
                             <span>Free event</span>
                         </label>
-
                         <label class="inline-flex items-center gap-2">
-                            <input type="radio" class="text-indigo-600 border-gray-300"
-                                   value="paid" x-model="pricing">
+                            <input type="radio" class="text-indigo-600 border-gray-300" value="paid" x-model="pricing" name="pricing">
                             <span>Paid event</span>
                         </label>
                     </div>
 
-                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Ticket cost</label>
-                            <input type="number" step="0.01" min="0"
-                                   name="ticket_cost"
-                                   x-model="ticketCost"
-                                   :readonly="pricing==='free'"
-                                   class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
-                            <p class="text-xs text-gray-500 mt-1" x-show="pricing==='free'">Read-only for free events (set to 0.00).</p>
-                        </div>
-
+                    {{-- Currency (paid only) --}}
+                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4" x-show="pricing==='paid'">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-                            <select name="ticket_currency"
-                                    x-model="currency"
+                            <select name="ticket_currency" x-model="currency" :required="pricing==='paid'"
                                     class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
-                                <template x-for="c in currencies" :key="c">
-                                    <option :value="c" x-text="c"></option>
-                                </template>
+                                <template x-for="c in currencies" :key="c"><option :value="c" x-text="c"></option></template>
                             </select>
                             <p class="text-xs text-gray-500 mt-1">We’ll map currency to payout country automatically.</p>
                         </div>
                     </div>
                 </div>
 
+                {{-- Ticket Types (paid only) — EDIT --}}
+                <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-gray-900">Ticket types</h3>
+                        <button type="button" id="add-cat" class="px-3 py-1.5 text-sm rounded-md border bg-white hover:bg-gray-50">
+                            Add ticket
+                        </button>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-2">
+                        Create one or more tickets (e.g., Standard, VIP, Early Bird). “Sort” controls the display order (low → high).
+                    </p>
+
+                    <div id="cat-rows" class="mt-4 space-y-4">
+                        @foreach($catsExisting as $i => $c)
+                            <div class="cat-row rounded-xl border border-gray-200 p-4">
+                                <input type="hidden" name="categories[{{ $i }}][id]" value="{{ $c->id }}">
+
+                                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                                    <!-- Name -->
+                                    <div class="sm:col-span-5">
+                                        <label class="block text-xs font-medium text-gray-600 mb-1">Ticket name</label>
+                                        <input
+                                            name="categories[{{ $i }}][name]"
+                                            value="{{ $c->name }}"
+                                            class="w-full rounded-lg border-gray-300"
+                                            placeholder="e.g., Standard"
+                                            :required="pricing==='paid'"
+                                            :disabled="pricing!=='paid'">
+                                    </div>
+
+                                    <!-- Price -->
+                                    <div class="sm:col-span-3">
+                                        <label class="block text-xs font-medium text-gray-600 mb-1">Price</label>
+                                        <input
+                                            type="number" step="0.01" min="0"
+                                            name="categories[{{ $i }}][price]"
+                                            value="{{ $c->price }}"
+                                            class="w-full rounded-lg border-gray-300"
+                                            placeholder="0.00"
+                                            :required="pricing==='paid'"
+                                            :disabled="pricing!=='paid'">
+                                    </div>
+
+                                    <!-- Capacity -->
+                                    <div class="sm:col-span-3">
+                                        <label class="block text-xs font-medium text-gray-600 mb-1">Capacity (optional)</label>
+                                        <input
+                                            type="number" min="0"
+                                            name="categories[{{ $i }}][capacity]"
+                                            value="{{ $c->capacity }}"
+                                            class="w-full rounded-lg border-gray-300"
+                                            placeholder="Leave blank for unlimited"
+                                            :disabled="pricing!=='paid'">
+                                    </div>
+
+                                    <!-- Sort -->
+                                    <div class="sm:col-span-1">
+                                        <label class="block text-xs font-medium text-gray-600 mb-1">Sort</label>
+                                        <input
+                                            type="number" min="0"
+                                            name="categories[{{ $i }}][sort]"
+                                            value="{{ $c->sort }}"
+                                            class="w-full rounded-lg border-gray-300"
+                                            placeholder="0"
+                                            :disabled="pricing!=='paid'">
+                                    </div>
+                                </div>
+
+                                <div class="mt-3 flex items-center justify-between">
+                                    <label class="inline-flex items-center gap-2 text-sm">
+                                        <input
+                                            type="checkbox"
+                                            name="categories[{{ $i }}][is_active]"
+                                            value="1"
+                                            @checked($c->is_active)
+                                            class="rounded border-gray-300"
+                                            :disabled="pricing!=='paid'">
+                                        <span>Active</span>
+                                    </label>
+
+                                    <button type="button" class="remove-cat text-rose-600 text-sm">Remove</button>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+
+                    {{-- Template for new rows --}}
+                    <template id="cat-tpl">
+                        <div class="cat-row rounded-xl border border-gray-200 p-4">
+                            <input type="hidden" name="_IDX_[id]" value="">
+
+                            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                                <div class="sm:col-span-5">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Ticket name</label>
+                                    <input name="_IDX_[name]" class="w-full rounded-lg border-gray-300"
+                                        placeholder="e.g., VIP" :required="pricing==='paid'" :disabled="pricing!=='paid'">
+                                </div>
+
+                                <div class="sm:col-span-3">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Price</label>
+                                    <input type="number" step="0.01" min="0" name="_IDX_[price]"
+                                        class="w-full rounded-lg border-gray-300" placeholder="0.00"
+                                        :required="pricing==='paid'" :disabled="pricing!=='paid'">
+                                </div>
+
+                                <div class="sm:col-span-3">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Capacity (optional)</label>
+                                    <input type="number" min="0" name="_IDX_[capacity]"
+                                        class="w-full rounded-lg border-gray-300" placeholder="Leave blank for unlimited"
+                                        :disabled="pricing!=='paid'">
+                                </div>
+
+                                <div class="sm:col-span-1">
+                                    <label class="block text-xs font-medium text-gray-600 mb-1">Sort</label>
+                                    <input type="number" min="0" name="_IDX_[sort]" value="0"
+                                        class="w-full rounded-lg border-gray-300" placeholder="0"
+                                        :disabled="pricing!=='paid'">
+                                </div>
+                            </div>
+
+                            <div class="mt-3 flex items-center justify-between">
+                                <label class="inline-flex items-center gap-2 text-sm">
+                                    <input type="checkbox" name="_IDX_[is_active]" value="1" checked
+                                        class="rounded border-gray-300" :disabled="pricing!=='paid'">
+                                    <span>Active</span>
+                                </label>
+
+                                <button type="button" class="remove-cat text-rose-600 text-sm">Remove</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                {{-- Payout destination (paid only) --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
                     <h3 class="text-lg font-semibold text-gray-900">Payout destination</h3>
 
-                    {{-- Found methods for that country (+ PayPal) --}}
                     <template x-if="eligibleMethods.length">
                         <div class="mt-3 grid grid-cols-1 gap-3">
                             <template x-for="m in eligibleMethods" :key="m.id">
@@ -152,19 +280,15 @@
                         </div>
                     </template>
 
-                    {{-- None saved --}}
                     <div class="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 text-sm"
                          x-show="pricing==='paid' && !eligibleMethods.length">
                         No payout method saved for <span class="font-semibold" x-text="country"></span>.
-                        <a class="underline" :href="profilePayoutUrl + '?country=' + country" target="_blank">Add one now</a>,
-                        then come back and refresh.
+                        <a class="underline" :href="profilePayoutUrl + '?country=' + country" target="_blank">Add one now</a>, then refresh.
                     </div>
                 </div>
 
-                 {{-- FOOTER (Continue button is disabled until a payout is chosen for paid events) --}}
                 <div class="flex items-center justify-between">
-                    <span class="text-sm text-amber-700"
-                          x-show="pricing==='paid' && !chosenMethodId">
+                    <span class="text-sm text-amber-700" x-show="pricing==='paid' && !chosenMethodId">
                         Select a payout destination to continue.
                     </span>
 
@@ -172,8 +296,7 @@
                             @click="goStep(2)"
                             :disabled="pricing==='paid' && !chosenMethodId"
                             aria-disabled="true"
-                            class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-white hover:bg-indigo-700
-                                   disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
                         Continue
                     </button>
                 </div>
@@ -240,14 +363,10 @@
                 </div>
 
                 <div class="flex items-center justify-between">
-                    <button type="button"
-                            @click="goStep(1)"
-                            class="inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-gray-700">
+                    <button type="button" @click="goStep(1)" class="inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-gray-700">
                         Back
                     </button>
-                    <button type="button"
-                            @click="goStep(3)"
-                            class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-white hover:bg-indigo-700">
+                    <button type="button" @click="goStep(3)" class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-white hover:bg-indigo-700">
                         Continue
                     </button>
                 </div>
@@ -259,41 +378,41 @@
                     <h3 class="text-lg font-semibold text-gray-900">Schedule</h3>
 
                     <div id="sessions-wrapper" class="mt-4 space-y-4">
-                        @php $existing = $event->sessions()->orderBy('session_date')->get(); @endphp
+                        @if ($existingCount > 0)
+                            @foreach ($existingSessions as $i => $s)
+                                @php $date = \Carbon\Carbon::parse($s->session_date); @endphp
+                                <div class="session-item rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h4 class="text-sm font-medium text-gray-700">Session {{ $i + 1 }}</h4>
+                                        <button type="button" class="remove-session text-sm text-rose-600 hover:text-rose-700">Remove</button>
+                                    </div>
 
-                        @forelse ($existing as $i => $s)
-                            @php $date = \Carbon\Carbon::parse($s->session_date); @endphp
-                            <div class="session-item rounded-lg border border-gray-200 bg-gray-50 p-4">
-                                <div class="flex items-center justify-between mb-3">
-                                    <h4 class="text-sm font-medium text-gray-700">Session {{ $i+1 }}</h4>
-                                    <button type="button" class="remove-session text-sm text-rose-600 hover:text-rose-700">Remove</button>
+                                    <input type="hidden" name="sessions[{{ $i }}][id]" value="{{ $s->id }}">
+                                    <input type="hidden" name="sessions[{{ $i }}][_delete]" value="0">
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        <div>
+                                            <label class="block text-sm text-gray-700 mb-1">Title</label>
+                                            <input type="text" name="sessions[{{ $i }}][name]"
+                                                   value="{{ old('sessions.'.$i.'.name', $s->session_name) }}"
+                                                   class="w-full rounded-lg border-gray-300" required>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm text-gray-700 mb-1">Date</label>
+                                            <input type="date" name="sessions[{{ $i }}][date]"
+                                                   value="{{ old('sessions.'.$i.'.date', $date->format('Y-m-d')) }}"
+                                                   class="w-full rounded-lg border-gray-300" required>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm text-gray-700 mb-1">Start time</label>
+                                            <input type="time" name="sessions[{{ $i }}][time]"
+                                                   value="{{ old('sessions.'.$i.'.time', $date->format('H:i')) }}"
+                                                   class="w-full rounded-lg border-gray-300" required>
+                                        </div>
+                                    </div>
                                 </div>
-
-                                <input type="hidden" name="sessions[{{ $i }}][id]" value="{{ $s->id }}">
-                                <input type="hidden" name="sessions[{{ $i }}][_delete]" value="0">
-
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div>
-                                        <label class="block text-sm text-gray-700 mb-1">Title</label>
-                                        <input type="text" name="sessions[{{ $i }}][name]"
-                                               value="{{ old("sessions.$i.name", $s->session_name) }}"
-                                               class="w-full rounded-lg border-gray-300" required>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm text-gray-700 mb-1">Date</label>
-                                        <input type="date" name="sessions[{{ $i }}][date]"
-                                               value="{{ old("sessions.$i.date", $date->format('Y-m-d')) }}"
-                                               class="w-full rounded-lg border-gray-300" required>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm text-gray-700 mb-1">Start time</label>
-                                        <input type="time" name="sessions[{{ $i }}][time]"
-                                               value="{{ old("sessions.$i.time", $date->format('H:i')) }}"
-                                               class="w-full rounded-lg border-gray-300" required>
-                                    </div>
-                                </div>
-                            </div>
-                        @empty
+                            @endforeach
+                        @else
                             <div class="session-item rounded-lg border border-gray-200 bg-gray-50 p-4">
                                 <div class="flex items-center justify-between mb-3">
                                     <h4 class="text-sm font-medium text-gray-700">Session 1</h4>
@@ -315,7 +434,7 @@
                                     </div>
                                 </div>
                             </div>
-                        @endforelse
+                        @endif
                     </div>
 
                     <button type="button" id="add-session"
@@ -324,6 +443,7 @@
                     </button>
                 </div>
 
+                {{-- Media --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-gray-900">Media</h3>
 
@@ -353,14 +473,11 @@
                 </div>
 
                 <div class="flex items-center justify-between">
-                    <button type="button"
-                            @click="goStep(2)"
-                            class="inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-gray-700">
+                    <button type="button" @click="goStep(2)" class="inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-gray-700">
                         Back
                     </button>
 
-                    <button type="submit"
-                            class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-white hover:bg-indigo-700">
+                    <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-white hover:bg-indigo-700">
                         Save Changes
                     </button>
                 </div>
@@ -373,17 +490,14 @@
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 
     <script>
-        // Alpine state for the edit flow
+        // Alpine state for the edit flow (no legacy ticket cost anywhere)
         document.addEventListener('alpine:init', () => {
             Alpine.data('editEvent', (cfg) => ({
                 step: 1,
 
-                currencies: ['GBP','USD','CAD','AUD','INR','NGN','KES','GHS'],
+                currencies: ['GBP','USD','CAD','AUD','INR','NGN','KES','GHS','EUR'],
                 pricing: cfg.defaultPaid ? 'paid' : 'free',
                 currency: (cfg.defaultCurrency || 'GBP').toUpperCase(),
-                ticketCost: cfg.defaultPaid
-                    ? (cfg.defaultCost || '0.00')
-                    : '0.00',
 
                 country: '',
                 allMethods: cfg.methods || [],
@@ -392,17 +506,15 @@
                 profilePayoutUrl: cfg.profilePayoutUrl,
 
                 init() {
-                    if (this.pricing === 'free') this.ticketCost = '0.00';
                     this.updateCountry();
                     this.refreshEligible();
-
                     this.$watch('currency', () => { this.updateCountry(); this.refreshEligible(); });
-                    this.$watch('pricing',  () => { if (this.pricing==='free') this.ticketCost = '0.00'; this.refreshEligible(); });
+                    this.$watch('pricing',  () => { this.refreshEligible(); });
                 },
 
                 mapCurrencyToCountry(c) {
                     c = String(c || '').toUpperCase();
-                    const map = { GBP:'GB', USD:'US', CAD:'CA', AUD:'AU', INR:'IN', NGN:'NG', KES:'KE', GHS:'GH' };
+                    const map = { GBP:'GB', USD:'US', CAD:'CA', AUD:'AU', INR:'IN', NGN:'NG', KES:'KE', GHS:'GH', EUR:'EU' };
                     return map[c] || 'GB';
                 },
 
@@ -439,18 +551,18 @@
         (function () {
             const wrapper = document.getElementById('sessions-wrapper');
             const addBtn  = document.getElementById('add-session');
-            let sessionIndex = {{ max(($existing->count() ?? 0), 1) }};
+            let sessionIndex = {{ max($existingCount, 1) }};
 
             function renumber() {
                 const items = wrapper.querySelectorAll('.session-item');
                 items.forEach((el, i) => {
                     el.querySelector('h4').textContent = `Session ${i + 1}`;
                     const btn = el.querySelector('.remove-session');
-                    btn.classList.toggle('hidden', items.length === 1);
+                    if (btn) btn.classList.toggle('hidden', items.length === 1);
                 });
             }
 
-            addBtn.addEventListener('click', () => {
+            addBtn?.addEventListener('click', () => {
                 const html = `
                 <div class="session-item rounded-lg border border-gray-200 bg-gray-50 p-4">
                     <div class="flex items-center justify-between mb-3">
@@ -514,6 +626,28 @@
                 if (place.formatted_address) input.value = place.formatted_address;
             });
         };
+
+        // Ticket types UI add/remove
+        (function () {
+            const wrap = document.getElementById('cat-rows');
+            const tpl  = document.getElementById('cat-tpl')?.innerHTML || '';
+            const add  = document.getElementById('add-cat');
+            let i = wrap ? wrap.querySelectorAll('.cat-row').length : 0;
+
+            function wireRemove() {
+                wrap?.querySelectorAll('.remove-cat').forEach(btn => {
+                    btn.onclick = () => btn.closest('.cat-row')?.remove();
+                });
+            }
+            add?.addEventListener('click', () => {
+                const html = tpl.replaceAll('__IDX__', `categories[${i++}]`);
+                const div = document.createElement('div');
+                div.innerHTML = html.trim();
+                wrap.appendChild(div.firstElementChild);
+                wireRemove();
+            });
+            wireRemove();
+        })();
     </script>
 
     @if (config('services.google.maps_key'))

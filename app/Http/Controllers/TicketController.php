@@ -15,9 +15,6 @@ use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
 
-
-
-
 class TicketController extends Controller
 {
     /** Tickets home (legacy). Prefer /my-tickets, but we keep this for old links. */
@@ -63,7 +60,7 @@ class TicketController extends Controller
         abort_unless($registration->event_id === $event->id, 404);
         $this->authorizeRegistration($registration);
 
-        $payload = $registration->freePassPayload(); // your helper on the model
+        $payload = $registration->freePassPayload();
         $party   = 1
             + (int)($registration->party_adults ?? 0)
             + (int)($registration->party_children ?? 0);
@@ -95,11 +92,26 @@ class TicketController extends Controller
         );
         $this->authorizeRegistration($registration);
 
-        // Idempotently make sure the whole set exists
-        $this->ensureTickets($event, $registration);
-        $siblings = $registration->tickets()->orderBy('index')->get(['id','serial','index']);
+        // Create only missing tickets, trim extras; return VALID only
+        $validTickets = $this->ensureTickets($event, $registration);
 
-        // QR payload (what the scanner expects)
+        // Ensure the chosen ticket is valid; otherwise jump to first valid
+        if ($ticket->status !== 'valid') {
+            $first = $validTickets->first();
+            abort_unless($first, 404);
+            return redirect()->route('tickets.show', [
+                'event'        => $event,
+                'registration' => $registration,
+                'ticket'       => $first,
+            ]);
+        }
+
+        $siblings = $validTickets->map(fn($t) => (object)[
+            'id'     => $t->id,
+            'serial' => $t->serial,
+            'index'  => $t->index,
+        ]);
+
         $qrPayload = "ET|v1|{$event->public_id}|{$ticket->token}";
 
         $qrSvg = null;
@@ -120,15 +132,13 @@ class TicketController extends Controller
     }
 
     /** Prefer PNG (GD/Imagick) for DomPDF; return data URI or null */
-    // Return raw PNG bytes using BaconQrCode (GD or Imagick). Null on failure.
-    /** Try to produce a PNG (binary) using Imagick backend. Returns raw bytes or null. */
     private function qrPngBinary(string $payload, int $size = 220): ?string
     {
         try {
             if (class_exists(\Imagick::class)) {
                 $renderer  = new ImageRenderer(new RendererStyle($size), new ImagickImageBackEnd('png'));
                 $writer    = new Writer($renderer);
-                return $writer->writeString($payload); // PNG bytes
+                return $writer->writeString($payload);
             }
         } catch (\Throwable $e) {
             \Log::error('QR PNG error: '.$e->getMessage());
@@ -142,7 +152,7 @@ class TicketController extends Controller
         try {
             $renderer = new ImageRenderer(new RendererStyle($size), new SvgImageBackEnd());
             $writer   = new Writer($renderer);
-            return $writer->writeString($payload); // raw <svg>...</svg>
+            return $writer->writeString($payload);
         } catch (\Throwable $e) {
             \Log::error('QR SVG error: '.$e->getMessage());
             return null;
@@ -156,7 +166,7 @@ class TicketController extends Controller
         return 'data:image/svg+xml;base64,'.base64_encode($svg);
     }
 
-    // --- ONE ticket -> PDF (writes PNG to a temp file & deletes it after) ---
+    // --- ONE ticket -> PDF ---
     public function pdfTicket(Event $event, EventRegistration $registration, EventTicket $ticket)
     {
         abort_unless(
@@ -173,7 +183,6 @@ class TicketController extends Controller
 
         $payload = "ET|v1|{$event->public_id}|{$ticket->token}";
 
-        // Prefer PNG via Imagick (save under /public to satisfy DomPDF chroot)
         $qrPath = null;
         if ($png = $this->qrPngBinary($payload, 260)) {
             $dir = public_path('qr-cache');
@@ -182,25 +191,23 @@ class TicketController extends Controller
             file_put_contents($qrPath, $png);
         }
 
-        // Fallback to SVG-as-image (data URI)
         $qrSvgDataUri = $qrPath ? null : $this->svgToDataUri($this->qrSvgString($payload, 220));
 
         $pdf = Pdf::setOption('chroot', public_path())
             ->loadView('tickets.pdf.single', [
                 'event'        => $event,
                 'ticket'       => $ticket,
-                'qrPath'       => $qrPath,       // absolute file path under /public
-                'qrSvgDataUri' => $qrSvgDataUri, // data:image/svg+xml;base64,...
+                'qrPath'       => $qrPath,
+                'qrSvgDataUri' => $qrSvgDataUri,
             ])
             ->setPaper('a4');
 
         $resp = $pdf->download("ticket-{$ticket->serial}.pdf");
-        if ($qrPath) @unlink($qrPath); // cleanup
+        if ($qrPath) @unlink($qrPath);
         return $resp;
     }
 
-
-    // --- ALL tickets in a registration -> PDF (writes multiple PNGs) ---
+    // --- ALL tickets in a registration -> PDF ---
     public function pdfRegistration(Event $event, EventRegistration $registration)
     {
         abort_unless($registration->event_id === $event->id, 404);
@@ -215,8 +222,8 @@ class TicketController extends Controller
         $dir = public_path('qr-cache');
         if (!is_dir($dir)) @mkdir($dir, 0777, true);
 
-        $qrPaths      = []; // [id => absolute path under /public]
-        $qrSvgDataUri = []; // [id => data:image/svg+xml;base64,...]
+        $qrPaths      = [];
+        $qrSvgDataUri = [];
 
         foreach ($tickets as $t) {
             $payload = "ET|v1|{$event->public_id}|{$t->token}";
@@ -241,15 +248,9 @@ class TicketController extends Controller
             ->setPaper('a4');
 
         $resp = $pdf->download("tickets-{$registration->id}.pdf");
-
-        // cleanup
         foreach ($qrPaths as $p) if ($p) @unlink($p);
-
         return $resp;
     }
-
-
-
 
     /** Organizer: camera/scan page. */
     public function scanPage(Event $event)
@@ -274,7 +275,7 @@ class TicketController extends Controller
         [$prefix, $ver] = [$parts[0], $parts[1]];
         if ($ver !== 'v1') return response()->json(['ok'=>false,'reason'=>'Unsupported QR version'], 422);
 
-        // PAID
+        // PAID ticket
         if ($prefix === 'ET') {
             if (count($parts) !== 4) return response()->json(['ok'=>false,'reason'=>'Invalid QR format'], 422);
             [, , $eventPid, $token] = $parts;
@@ -297,7 +298,7 @@ class TicketController extends Controller
             ]);
         }
 
-        // FREE
+        // FREE pass
         if ($prefix === 'FR') {
             if (count($parts) !== 5) return response()->json(['ok'=>false,'reason'=>'Invalid QR format'], 422);
             [, , $eventPid, $regId, $token] = $parts;
@@ -326,26 +327,121 @@ class TicketController extends Controller
         return response()->json(['ok' => false, 'reason' => 'Unknown QR type'], 422);
     }
 
-    /** Idempotently create tickets for a paid registration. */
+    /**
+     * Idempotently create/trim VALID tickets for a paid registration and return them (ordered).
+     * - Only runs when registration status is paid/complete.
+     * - Creates missing tickets with status=valid.
+     * - Revokes extras (status=revoked) so they never show/scan.
+     */
     private function ensureTickets(Event $event, EventRegistration $registration)
     {
-        $qty = max(1, (int)($registration->quantity ?? 1));
-        $existing = $registration->tickets()->count();
+        $status = strtolower((string) ($registration->status ?? ''));
+        $paidStates = ['paid','complete','completed','succeeded'];
 
-        for ($i = $existing; $i < $qty; $i++) {
-            $token  = EventTicket::makeToken($event->public_id, $registration->id, $i);
-            $serial = EventTicket::makeSerial($registration->id, $i);
-            if (!EventTicket::where('token', $token)->exists()) {
-                $registration->tickets()->create([
-                    'event_id' => $event->id,
-                    'index'    => $i,
-                    'serial'   => $serial,
-                    'token'    => $token,
-                ]);
-            }
+        // For unpaid/cancelled/failed – never create; just show existing VALID ones.
+        if (!in_array($status, $paidStates, true)) {
+            return $registration->tickets()
+                ->where('status', 'valid')
+                ->orderBy('index')
+                ->get();
         }
 
-        return $registration->tickets()->orderBy('index')->get();
+        // Items (category mode) and expected counts
+        $items         = $registration->items()->orderBy('id')->get(['event_ticket_category_id','quantity']);
+        $useCategories = $items->count() > 0;
+
+        $expectedFromReg   = max(0, (int) ($registration->quantity ?? 0));
+        $expectedFromItems = (int) $items->sum('quantity');
+
+        // Choose a sane expected total:
+        // - categories: prefer the smaller of (reg.qty, items sum). If reg.qty is 0, fall back to items sum.
+        // - legacy: use reg.qty (>=1).
+        if ($useCategories) {
+            $expectedTotal = $expectedFromReg > 0
+                ? min($expectedFromReg, $expectedFromItems)
+                : $expectedFromItems;
+            $expectedTotal = max(1, $expectedTotal);
+        } else {
+            $expectedTotal = max(1, $expectedFromReg);
+        }
+
+        // Current VALID set
+        $valid = $registration->tickets()->where('status', 'valid')->orderBy('index')->get();
+
+        // Global next index (monotonic across the registration)
+        $maxIndex  = (int) ($registration->tickets()->max('index') ?? -1);
+        $nextIndex = function () use (&$maxIndex) { $maxIndex++; return $maxIndex; };
+
+        if ($useCategories) {
+            // Expected per category
+            $expectedByCat = $items->groupBy('event_ticket_category_id')
+                ->map(fn($g) => (int) $g->sum('quantity'));
+
+            // Existing VALID per category
+            $validByCat = $valid->groupBy('event_ticket_category_id')->map->count();
+
+            // Create missing, but never exceed expectedTotal globally
+            foreach ($expectedByCat as $catId => $need) {
+                $have       = (int) ($validByCat[$catId] ?? 0);
+                $remaining  = $expectedTotal - $valid->count();
+                if ($remaining <= 0) break;
+
+                $toMake = min(max(0, $need - $have), $remaining);
+                for ($j = 0; $j < $toMake; $j++) {
+                    $i      = $nextIndex();
+                    $token  = \App\Models\EventTicket::makeToken($event->public_id, $registration->id, $i);
+                    $serial = \App\Models\EventTicket::makeSerial($registration->id, $i);
+
+                    if (!\App\Models\EventTicket::where('token', $token)->exists()) {
+                        $registration->tickets()->create([
+                            'event_id'                 => $event->id,
+                            'event_ticket_category_id' => $catId,
+                            'index'                    => $i,
+                            'serial'                   => $serial,
+                            'token'                    => $token,
+                            'status'                   => 'valid',
+                        ]);
+                    }
+                }
+
+                // refresh valid + per-cat counts for next loop
+                $valid     = $registration->tickets()->where('status', 'valid')->orderBy('index')->get();
+                $validByCat = $valid->groupBy('event_ticket_category_id')->map->count();
+            }
+        } else {
+            // Legacy single price: create up to expectedTotal
+            $have   = $valid->count();
+            $toMake = max(0, $expectedTotal - $have);
+
+            for ($k = 0; $k < $toMake; $k++) {
+                $i      = $nextIndex();
+                $token  = \App\Models\EventTicket::makeToken($event->public_id, $registration->id, $i);
+                $serial = \App\Models\EventTicket::makeSerial($registration->id, $i);
+
+                if (!\App\Models\EventTicket::where('token', $token)->exists()) {
+                    $registration->tickets()->create([
+                        'event_id' => $event->id,
+                        'index'    => $i,
+                        'serial'   => $serial,
+                        'token'    => $token,
+                        'status'   => 'valid',
+                    ]);
+                }
+            }
+
+            $valid = $registration->tickets()->where('status', 'valid')->orderBy('index')->get();
+        }
+
+        // Final guard: trim extras globally to match expectedTotal exactly
+        if ($valid->count() > $expectedTotal) {
+            $extras = $valid->sortByDesc('index')->slice($expectedTotal); // drop newest first
+            foreach ($extras as $t) {
+                $t->update(['status' => 'revoked']);
+            }
+            $valid = $registration->tickets()->where('status','valid')->orderBy('index')->get();
+        }
+
+        return $valid;
     }
 
     /** Registration ownership check (by user_id OR guest email). */

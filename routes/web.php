@@ -21,6 +21,8 @@ use App\Http\Controllers\Admin\UserAdminController;
 use App\Http\Controllers\Admin\EventAdminController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\CheckinsController;
+use App\Http\Controllers\Admin\HomepageSlideController; // <-- add this
+use App\Http\Controllers\UserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -62,6 +64,14 @@ Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'
 */
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [AdminDashboardController::class, 'index'])->name('dashboard');
+
+    // Homepage slides
+    Route::get('/slides',                [HomepageSlideController::class, 'index'])->name('slides.index');
+    Route::get('/slides/create',         [HomepageSlideController::class, 'create'])->name('slides.create');
+    Route::post('/slides',               [HomepageSlideController::class, 'store'])->name('slides.store');
+    Route::get('/slides/{slide}/edit',   [HomepageSlideController::class, 'edit'])->name('slides.edit');
+    Route::put('/slides/{slide}',        [HomepageSlideController::class, 'update'])->name('slides.update');
+    Route::delete('/slides/{slide}',     [HomepageSlideController::class, 'destroy'])->name('slides.destroy');
 
     // Payouts
     Route::get('/payouts', [PayoutAdminController::class, 'index'])->name('payouts.index');
@@ -155,7 +165,7 @@ Route::get('/events/{event}/ticket/manage/{reg}',    [TicketLookupController::cl
 Route::post('/events/{event}/ticket/manage/{reg}',   [TicketLookupController::class, 'update'])->name('events.ticket.update');
 
 Route::get('/events/{event}/avatar',   [EventController::class, 'avatar'])->name('events.avatar');
-Route::get('/events/{event}/register', [RegistrationController::class, 'create'])->name('events.register.create');
+Route::get('/events/{event}/register', [RegistrationController::class, 'create'])->name('events.register');
 Route::post('/events/{event}/register',[RegistrationController::class, 'store'])->name('events.register.store');
 Route::get('/events/{event}/register/result', [RegistrationController::class, 'result'])->name('events.register.result');
 

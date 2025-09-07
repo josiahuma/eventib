@@ -96,145 +96,101 @@
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
                     <div class="flex items-center justify-between">
                         <h3 class="text-lg font-semibold text-gray-900">Ticket types</h3>
-                        <button type="button" id="add-cat" class="px-3 py-1.5 text-sm rounded-md border bg-white hover:bg-gray-50">
-                            Add
-                        </button>
+                        <button type="button" id="add-cat" class="px-3 py-1.5 text-sm rounded-md border bg-white hover:bg-gray-50">Add</button>
                     </div>
                     <p class="text-sm text-gray-600 mt-2">
                         Create one or more tickets (e.g., Standard, VIP, Early Bird). At least one is required.
                     </p>
 
-                    <div id="cat-rows" class="mt-4 space-y-3">
+                    <div id="cat-rows" class="mt-4 space-y-2">
                         @php($cats = old('categories', []))
                         @forelse($cats as $i => $c)
-                            <div class="cat-row border rounded-lg p-3">
-                                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                                    {{-- Name --}}
-                                    <div class="sm:col-span-5">
-                                        <label class="block text-xs font-medium text-gray-700 mb-1">Ticket name</label>
-                                        <input
-                                            name="categories[{{ $i }}][name]"
-                                            value="{{ $c['name'] ?? '' }}"
-                                            class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="e.g., Standard"
-                                            :required="pricing==='paid'"
-                                            :disabled="pricing!=='paid'">
-                                    </div>
-
-                                    {{-- Price --}}
-                                    <div class="sm:col-span-3">
-                                        <label class="block text-xs font-medium text-gray-700 mb-1">Price</label>
-                                        <input
-                                            type="number" step="0.01" min="0"
-                                            name="categories[{{ $i }}][price]"
-                                            value="{{ $c['price'] ?? 0 }}"
-                                            class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="e.g., 10.00"
-                                            :required="pricing==='paid'"
-                                            :disabled="pricing!=='paid'">
-                                    </div>
-
-                                    {{-- Capacity --}}
-                                    <div class="sm:col-span-3">
-                                        <label class="block text-xs font-medium text-gray-700 mb-1">Capacity (optional)</label>
-                                        <input
-                                            type="number" min="0"
-                                            name="categories[{{ $i }}][capacity]"
-                                            value="{{ $c['capacity'] ?? '' }}"
-                                            class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="Unlimited"
-                                            :disabled="pricing!=='paid'">
-                                    </div>
-
-                                    {{-- Remove --}}
-                                    <div class="sm:col-span-1 flex sm:justify-end">
-                                        <button type="button" class="remove-cat text-rose-600 text-sm mt-1 sm:mt-6">Remove</button>
-                                    </div>
+                            <div class="grid grid-cols-12 gap-2 items-center cat-row border p-2 rounded-lg">
+                                <div class="col-span-5">
+                                    <input
+                                        name="categories[{{ $i }}][name]"
+                                        value="{{ $c['name'] ?? '' }}"
+                                        class="w-full rounded-lg border-gray-300"
+                                        placeholder="Name (e.g., Standard)"
+                                        :required="pricing==='paid'"
+                                        :disabled="pricing!=='paid'">
+                                </div>
+                                <div class="col-span-3">
+                                    <input
+                                        type="number" step="0.01" min="0"
+                                        name="categories[{{ $i }}][price]"
+                                        value="{{ $c['price'] ?? 0 }}"
+                                        class="w-full rounded-lg border-gray-300"
+                                        placeholder="Price"
+                                        :required="pricing==='paid'"
+                                        :disabled="pricing!=='paid'">
+                                </div>
+                                <div class="col-span-3">
+                                    <input
+                                        type="number" min="0"
+                                        name="categories[{{ $i }}][capacity]"
+                                        value="{{ $c['capacity'] ?? '' }}"
+                                        class="w-full rounded-lg border-gray-300"
+                                        placeholder="Capacity (opt)"
+                                        :disabled="pricing!=='paid'">
+                                </div>
+                                <div class="col-span-1 text-right">
+                                    <button type="button" class="remove-cat text-rose-600 text-sm">Remove</button>
                                 </div>
                             </div>
                         @empty
                             {{-- one empty row by default --}}
-                            <div class="cat-row border rounded-lg p-3">
-                                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                                    {{-- Name --}}
-                                    <div class="sm:col-span-5">
-                                        <label class="block text-xs font-medium text-gray-700 mb-1">Ticket name</label>
-                                        <input
-                                            name="categories[0][name]"
-                                            class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="e.g., Standard"
-                                            :required="pricing==='paid'"
-                                            :disabled="pricing!=='paid'">
-                                    </div>
-
-                                    {{-- Price --}}
-                                    <div class="sm:col-span-3">
-                                        <label class="block text-xs font-medium text-gray-700 mb-1">Price</label>
-                                        <input
-                                            type="number" step="0.01" min="0"
-                                            name="categories[0][price]"
-                                            class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="e.g., 10.00"
-                                            :required="pricing==='paid'"
-                                            :disabled="pricing!=='paid'">
-                                    </div>
-
-                                    {{-- Capacity --}}
-                                    <div class="sm:col-span-3">
-                                        <label class="block text-xs font-medium text-gray-700 mb-1">Capacity (optional)</label>
-                                        <input
-                                            type="number" min="0"
-                                            name="categories[0][capacity]"
-                                            class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="Unlimited"
-                                            :disabled="pricing!=='paid'">
-                                    </div>
-
-                                    {{-- Remove --}}
-                                    <div class="sm:col-span-1 flex sm:justify-end">
-                                        <button type="button" class="remove-cat text-rose-600 text-sm mt-1 sm:mt-6">Remove</button>
-                                    </div>
+                            <div class="grid grid-cols-12 gap-2 items-center cat-row border p-2 rounded-lg">
+                                <div class="col-span-5">
+                                    <input
+                                        name="categories[0][name]"
+                                        class="w-full rounded-lg border-gray-300"
+                                        placeholder="Name (e.g., Standard)"
+                                        :required="pricing==='paid'"
+                                        :disabled="pricing!=='paid'">
+                                </div>
+                                <div class="col-span-3">
+                                    <input
+                                        type="number" step="0.01" min="0"
+                                        name="categories[0][price]"
+                                        class="w-full rounded-lg border-gray-300"
+                                        placeholder="Price"
+                                        :required="pricing==='paid'"
+                                        :disabled="pricing!=='paid'">
+                                </div>
+                                <div class="col-span-3">
+                                    <input
+                                        type="number" min="0"
+                                        name="categories[0][capacity]"
+                                        class="w-full rounded-lg border-gray-300"
+                                        placeholder="Capacity (opt)"
+                                        :disabled="pricing!=='paid'">
+                                </div>
+                                <div class="col-span-1 text-right">
+                                    <button type="button" class="remove-cat text-rose-600 text-sm">Remove</button>
                                 </div>
                             </div>
                         @endforelse
                     </div>
 
-                    {{-- Template used by your JS "Add" button (keeps same IDs/classes so no JS changes needed) --}}
                     <template id="cat-tpl">
-                        <div class="cat-row border rounded-lg p-3">
-                            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                                <div class="sm:col-span-5">
-                                    <label class="block text-xs font-medium text-gray-700 mb-1">Ticket name</label>
-                                    <input name="_IDX_[name]"
-                                        class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
-                                        placeholder="e.g., VIP"
-                                        :required="pricing==='paid'"
-                                        :disabled="pricing!=='paid'">
-                                </div>
-                                <div class="sm:col-span-3">
-                                    <label class="block text-xs font-medium text-gray-700 mb-1">Price</label>
-                                    <input type="number" step="0.01" min="0"
-                                        name="_IDX_[price]"
-                                        class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
-                                        placeholder="e.g., 20.00"
-                                        :required="pricing==='paid'"
-                                        :disabled="pricing!=='paid'">
-                                </div>
-                                <div class="sm:col-span-3">
-                                    <label class="block text-xs font-medium text-gray-700 mb-1">Capacity (optional)</label>
-                                    <input type="number" min="0"
-                                        name="_IDX_[capacity]"
-                                        class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
-                                        placeholder="Unlimited"
-                                        :disabled="pricing!=='paid'">
-                                </div>
-                                <div class="sm:col-span-1 flex sm:justify-end">
-                                    <button type="button" class="remove-cat text-rose-600 text-sm mt-1 sm:mt-6">Remove</button>
-                                </div>
+                        <div class="grid grid-cols-12 gap-2 items-center cat-row border p-2 rounded-lg">
+                            <div class="col-span-5">
+                                <input name="__IDX__[name]" class="w-full rounded-lg border-gray-300" placeholder="Name (e.g., VIP)" :required="pricing==='paid'" :disabled="pricing!=='paid'">
+                            </div>
+                            <div class="col-span-3">
+                                <input type="number" step="0.01" min="0" name="__IDX__[price]" class="w-full rounded-lg border-gray-300" placeholder="Price" :required="pricing==='paid'" :disabled="pricing!=='paid'">
+                            </div>
+                            <div class="col-span-3">
+                                <input type="number" min="0" name="__IDX__[capacity]" class="w-full rounded-lg border-gray-300" placeholder="Capacity (opt)" :disabled="pricing!=='paid'">
+                            </div>
+                            <div class="col-span-1 text-right">
+                                <button type="button" class="remove-cat text-rose-600 text-sm">Remove</button>
                             </div>
                         </div>
                     </template>
                 </div>
+
                 {{-- Payout destination (paid only) --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
                     <h3 class="text-lg font-semibold text-gray-900">Payout destination</h3>

@@ -29,20 +29,17 @@
                     Create, promote, and sell tickets for events worldwide.
                 </p>
                 <div class="flex items-center gap-3 pt-1">
-                    <a href="https://twitter.com" target="_blank" rel="noopener" class="hover:opacity-90" aria-label="X">
+                    <a href="https://x.com/Eventib_" target="_blank" rel="noopener" class="hover:opacity-90" aria-label="X">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2H21l-6.52 7.46L22 22h-6.9l-4.53-6.01L5.2 22H2.44l7.05-8.06L2 2h7l4.13 5.6L18.24 2Zm-2.41 18h1.9L8.28 4h-1.9l9.44 16Z"/></svg>
                     </a>
-                    <a href="https://facebook.com" target="_blank" rel="noopener" class="hover:opacity-90" aria-label="Facebook">
+                    <a href="https://www.facebook.com/eventibcom/" target="_blank" rel="noopener" class="hover:opacity-90" aria-label="Facebook">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M13 22v-8h3l1-4h-4V7.5c0-1.16.32-1.95 2-1.95h2V2.1C16.67 2.04 15.34 2 14 2c-3.2 0-5 1.9-5 5.4V10H6v4h3v8h4z"/></svg>
                     </a>
-                    <a href="https://instagram.com" target="_blank" rel="noopener" class="hover:opacity-90" aria-label="Instagram">
+                    <a href="https://www.instagram.com/eventib__" target="_blank" rel="noopener" class="hover:opacity-90" aria-label="Instagram">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Zm0 2a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7a3 3 0 0 0-3-3H7Zm5 3.5A6.5 6.5 0 1 1 5.5 14 6.5 6.5 0 0 1 12 7.5Zm0 2A4.5 4.5 0 1 0 16.5 14 4.5 4.5 0 0 0 12 9.5Zm5.25-3.25a1.25 1.25 0 1 1-1.25 1.25 1.25 1.25 0 0 1 1.25-1.25Z"/></svg>
                     </a>
-                    <a href="https://linkedin.com" target="_blank" rel="noopener" class="hover:opacity-90" aria-label="LinkedIn">
+                    <a href="https://www.linkedin.com/company/eventib" target="_blank" rel="noopener" class="hover:opacity-90" aria-label="LinkedIn">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M6 9H3v12h3V9Zm.34-4.5a1.84 1.84 0 1 1-3.68 0 1.84 1.84 0 0 1 3.68 0ZM21 21h-3v-6.5c0-1.55-.55-2.6-1.93-2.6A2.09 2.09 0 0 0 13 13.1V21h-3V9h3v1.62A3.34 3.34 0 0 1 15.86 9c2.36 0 5.14 1.39 5.14 5.74V21Z"/></svg>
-                    </a>
-                    <a href="https://youtube.com" target="_blank" rel="noopener" class="hover:opacity-90" aria-label="YouTube">
-                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M21.8 8.2a3 3 0 0 0-2.1-2.1C18 5.6 12 5.6 12 5.6s-6 0-7.7.5A3 3 0 0 0 2.2 8.2 31 31 0 0 0 1.7 12a31 31 0 0 0 .5 3.8 3 3 0 0 0 2.1 2.1c1.7.5 7.7.5 7.7.5s6 0 7.7-.5a3 3 0 0 0 2.1-2.1c.4-1.3.5-2.6.5-3.8a31 31 0 0 0-.5-3.8ZM10 14.8V9.2l4.8 2.8L10 14.8Z"/></svg>
                     </a>
                 </div>
             </div>

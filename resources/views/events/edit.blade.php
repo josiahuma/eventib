@@ -181,6 +181,68 @@
                     </template>
                 </div>
 
+                {{-- Fee handling (paid only, READ-ONLY on edit) --}}
+                @php
+                    // whatever the event currently has; default to 'absorb' if missing
+                    $feeMode = old('fee_mode', $event->fee_mode ?? 'absorb');
+                @endphp
+
+                <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
+                    <div class="flex items-start justify-between">
+                        <h3 class="text-lg font-semibold text-gray-900">Platform fee</h3>
+                        <span class="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700"
+                            title="This setting is locked after the event is created.">
+                            {{-- lock icon --}}
+                            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M12 2a5 5 0 00-5 5v3H6a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2h-1V7a5 5 0 00-5-5zm-3 8V7a3 3 0 116 0v3H9z"/>
+                            </svg>
+                            Locked
+                        </span>
+                    </div>
+
+                    <p class="text-sm text-gray-600 mt-1">
+                        Payment processing fee is <b>5.9%</b> per transaction. This choice was made when the event was created and
+                        can’t be changed here.
+                    </p>
+
+                    {{-- Keep submitting the saved value, even though radios are disabled --}}
+                    <input type="hidden" name="fee_mode" value="{{ $feeMode }}">
+
+                    {{-- Make the radios visibly disabled and non-interactive --}}
+                    <div class="mt-4 space-y-3 opacity-60 pointer-events-none select-none">
+                        <label class="flex items-start gap-3">
+                            <input type="radio" class="mt-1 text-indigo-600 border-gray-300"
+                                name="fee_mode_view" value="absorb" disabled
+                                @checked($feeMode === 'absorb')>
+                            <div>
+                                <div class="font-medium text-gray-900">Organiser absorbs fee</div>
+                                <div class="text-sm text-gray-600">
+                                    Attendees pay the ticket price. Your payout is ticket revenue minus 5.9%.
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="flex items-start gap-3">
+                            <input type="radio" class="mt-1 text-indigo-600 border-gray-300"
+                                name="fee_mode_view" value="pass" disabled
+                                @checked($feeMode === 'pass')>
+                            <div>
+                                <div class="font-medium text-gray-900">Pass fee to attendees</div>
+                                <div class="text-sm text-gray-600">
+                                    Attendees pay ticket price <i>plus</i> 5.9% at checkout. Your payout is the full ticket price.
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+
+                    {{-- Optional: clarify the active mode --}}
+                    <div class="mt-3 text-xs text-gray-500">
+                        Current setting: <span class="font-medium text-gray-800">
+                            {{ $feeMode === 'pass' ? 'Pass fee to attendees' : 'Organiser absorbs fee' }}
+                        </span>
+                    </div>
+                </div>                
+
                 {{-- Payout destination (paid only) --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
                     <h3 class="text-lg font-semibold text-gray-900">Payout destination</h3>

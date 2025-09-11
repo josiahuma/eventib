@@ -16,7 +16,9 @@ class CheckinsController extends Controller
         $u = Auth::user();
         abort_unless($u && ($event->user_id === $u->id || ($u->is_admin ?? false)), 403);
 
-        $mode         = (($event->ticket_cost ?? 0) > 0) ? 'paid' : 'free';
+        $isCatPaid    = $event->categories()->where('price', '>', 0)->exists();
+        $isLegacyPaid = ($event->ticket_cost ?? 0) > 0;
+        $mode = ($isCatPaid || $isLegacyPaid) ? 'paid' : 'free';
         $filterStatus = $request->query('status', 'checked'); // ui filter: 'checked'|'all'
         $onlyChecked  = $filterStatus === 'checked';
         $term         = trim((string) $request->query('q', ''));

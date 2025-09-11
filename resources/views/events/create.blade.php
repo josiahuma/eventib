@@ -191,6 +191,42 @@
                     </template>
                 </div>
 
+                {{-- Fee handling (paid only) --}}
+                <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
+                    <h3 class="text-lg font-semibold text-gray-900">Platform fee</h3>
+                    <p class="text-sm text-gray-600 mt-1">
+                        Payment processing fee is <b>5.9%</b> per transaction. You can choose to pass on the platform fee to your attendees, or absorb it yourself.
+                        This fee helps us cover payment processing and development costs. This option CANNOT be modified after creating the event.
+                    </p>
+
+                    <div class="mt-4 space-y-3">
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input type="radio" class="mt-1 text-indigo-600 border-gray-300"
+                                name="fee_mode" value="absorb"
+                                @checked(old('fee_mode', 'absorb') === 'absorb')>
+                            <div>
+                                <div class="font-medium text-gray-900">Organiser absorbs fee</div>
+                                <div class="text-sm text-gray-600">
+                                    Attendees pay the ticket price. Your payout is ticket revenue minus 5.9%.
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input type="radio" class="mt-1 text-indigo-600 border-gray-300"
+                                name="fee_mode" value="pass"
+                                @checked(old('fee_mode') === 'pass')>
+                            <div>
+                                <div class="font-medium text-gray-900">Pass fee to attendees</div>
+                                <div class="text-sm text-gray-600">
+                                    Attendees pay ticket price <i>plus</i> 5.9% at checkout. Your payout is the full ticket price.
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+
                 {{-- Payout destination (paid only) --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
                     <h3 class="text-lg font-semibold text-gray-900">Payout destination</h3>

@@ -15,6 +15,7 @@ class Event extends Model
         'user_id','name','organizer','category','tags','location','description',
         'avatar_url','banner_url','ticket_cost','is_promoted','public_id',
         'ticket_currency','payout_method_id', 'is_disabled',
+        'fee_mode', 'fee_bps',
     ];
 
     protected $casts = [
@@ -22,6 +23,7 @@ class Event extends Model
         'is_promoted' => 'boolean',
         'ticket_cost' => 'decimal:2',
         'is_disabled' => 'boolean',
+        'fee_bps'     => 'integer',
     ];
 
     public function getCurrencySymbolAttribute(): string
@@ -52,21 +54,33 @@ class Event extends Model
     public function user()          { return $this->belongsTo(User::class); }
     public function payoutMethod()  { return $this->belongsTo(UserPayoutMethod::class, 'payout_method_id')->withDefault(); }
 
-    /** Gross paid (minor units) from registrations.amount where status is paid */
+    public function feeMode(): string
+    {
+        return in_array($this->fee_mode, ['absorb','pass'], true) ? $this->fee_mode : 'absorb';
+    }
+
+    public function feeRate(): float
+    {
+        return max(0, (int)($this->fee_bps ?? 590)) / 10000; // e.g. 590 -> 0.059
+    }
+
+     /** Gross paid (minor units) from registrations.amount (organiser revenue only) */
     public function grossPaidMinor(): int
     {
         return (int) $this->registrations()
             ->whereIn('status', ['paid','complete','completed','succeeded'])
-            ->sum(DB::raw('ROUND(amount * 100)')); // amount is decimal major units
+            ->sum(\DB::raw('ROUND(amount * 100)')); // amount is ticket subtotal in major units
     }
 
-    /** 9.99% fee on gross (minor units) */
+    /** Platform fee on organiser (minor units). If fee is passed to attendee, organiser is not charged. */
     public function feeMinor(): int
     {
-        return (int) round($this->grossPaidMinor() * 0.0999);
+        if ($this->feeMode() === 'pass') {
+            return 0; // organiser not charged when fee is passed to attendee
+        }
+        return (int) round($this->grossPaidMinor() * $this->feeRate());
     }
 
-    /** Net earned (minor units) */
     public function netPaidMinor(): int
     {
         return max(0, $this->grossPaidMinor() - $this->feeMinor());

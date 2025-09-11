@@ -146,7 +146,7 @@ class PayoutController extends Controller
             });
 
         // 9.99% commission
-        $commissionMinor = intdiv($sumMinor * 999, 10000);
+        $commissionMinor = intdiv($sumMinor * 590, 10000);
         $netMinor        = max(0, $sumMinor - $commissionMinor);
 
         // Subtract payouts not failed/cancelled

@@ -22,20 +22,18 @@ class RegistrantsController extends Controller
         $isAdmin = (bool) ($user->is_admin ?? false);
         $isOwner = $event->user_id === $user->id;
 
-        // ✅ Access control: owner OR admin
         abort_unless($isOwner || $isAdmin, 403);
 
-        // ── Correct "paid event" detection (categories OR single-price) ─────────────
+        // ── Detect paid events (categories OR legacy single price) ──
         $hasPaidCategories = $event->categories()
             ->where('is_active', true)
             ->where('price', '>', 0)
             ->exists();
-
         $isPaidEvent = $hasPaidCategories || (($event->ticket_cost ?? 0) > 0);
 
-        // ✅ Unlock gate only applies to non-admins on FREE events
+        // Unlock gate only for FREE events (non-admin)
         if (!$isAdmin && !$isPaidEvent) {
-            $isUnlocked = EventUnlock::where('event_id', $event->id)
+            $isUnlocked = \App\Models\EventUnlock::where('event_id', $event->id)
                 ->where('user_id', $user->id)
                 ->whereNotNull('unlocked_at')
                 ->exists();
@@ -46,42 +44,76 @@ class RegistrantsController extends Controller
             }
         }
 
-        // ── Load only completed registrations (never canceled/pending) ─────────────
+        // ── Load registrations (+items for accurate pass-through calc) ──
         $event->load([
             'registrations' => function ($q) {
-                $q->whereIn('status', ['paid', 'free'])
-                  ->latest();
+                $q->whereIn('status', ['paid', 'free'])->latest();
             },
             'registrations.sessions' => fn ($q) => $q->orderBy('session_date'),
+            // items let us compute ticket revenue excluding pass-through fees
+            'registrations.items',
         ]);
 
-        // ── Sum money actually received (PAID rows only) in minor units ───────────
-        $sumMinor = (int) $event->registrations
-            ->where('status', 'paid')
-            ->sum(function ($r) {
-                return (int) round(((float) ($r->amount ?? 0)) * 100);
-            });
+        $feeMode  = $event->fee_mode === 'pass' ? 'pass' : 'absorb'; // default absorb
+        $feeRate  = 0.059; // 5.9%
+        $paidRegs = $event->registrations->where('status', 'paid');
 
-        // 9.99% commission
-        $commissionMinor = intdiv($sumMinor * 999, 10000);
+        // Attendee-paid total (whatever we stored in registrations.amount after Stripe)
+        $sumMinor = (int) $paidRegs->sum(function ($r) {
+            return (int) round(((float) ($r->amount ?? 0)) * 100);
+        });
 
-        // Net currently earned
-        $payoutMinor = max(0, $sumMinor - $commissionMinor);
+        // Ticket revenue (organiser’s base) independent of pass/absorb:
+        // - If categories: exact from registration items (snapshot at purchase)
+        // - Else fallback to legacy: quantity * current event ticket_cost (best effort)
+        // - Last resort (pass mode, no items): derive base ≈ total / (1 + feeRate)
+        $ticketRevenueMinor = (int) $paidRegs->sum(function ($r) use ($event, $feeMode, $feeRate) {
+            // Categories path – most accurate
+            if ($r->relationLoaded('items') && $r->items && $r->items->count()) {
+                return (int) round(((float) $r->items->sum('line_total')) * 100);
+            }
 
-        // ✅ When admin is viewing, compute payouts using the EVENT OWNER id
+            // Legacy single-price path (best effort using current event price)
+            $qty      = max(1, (int) ($r->quantity ?? 1));
+            $unitNow  = (float) ($event->ticket_cost ?? 0);
+            if ($unitNow > 0) {
+                return (int) round($qty * $unitNow * 100);
+            }
+
+            // Last resort: if fee was passed and amount includes fee, back-solve
+            // base ≈ total / (1 + feeRate)
+            if ($feeMode === 'pass') {
+                $totalMinor = (int) round(((float) ($r->amount ?? 0)) * 100);
+                return (int) round($totalMinor / (1 + $feeRate));
+            }
+
+            // Otherwise we have nothing meaningful
+            return 0;
+        });
+
+        // Commission and organiser net:
+        // - PASS: organiser gets full ticket revenue (no commission deduction here)
+        // - ABSORB: commission = 5.9% of attendee-paid total
+        if ($feeMode === 'pass') {
+            $commissionMinor = 0;
+            $payoutMinor     = max(0, $ticketRevenueMinor);
+            $earnedMinor     = $payoutMinor; // for the “Amount earned” tile
+        } else {
+            $commissionMinor = intdiv($sumMinor * 590, 10000); // 5.90%
+            $payoutMinor     = max(0, $sumMinor - $commissionMinor);
+            $earnedMinor     = $payoutMinor;
+        }
+
+        // Payout availability uses the event owner for deductions
         $ownerId = $event->user_id;
-
-        // Subtract all payouts that are not failed/cancelled
-        $deductedMinor = (int) EventPayout::where('event_id', $event->id)
+        $deductedMinor = (int) \App\Models\EventPayout::where('event_id', $event->id)
             ->where('user_id', $ownerId)
             ->whereNotIn('status', ['failed', 'cancelled'])
             ->sum('amount');
 
-        // What can be requested right now
         $availableMinor = max(0, $payoutMinor - $deductedMinor);
 
-        // Show a “Processing” chip for context
-        $hasProcessingPayout = EventPayout::where('event_id', $event->id)
+        $hasProcessingPayout = \App\Models\EventPayout::where('event_id', $event->id)
             ->where('user_id', $ownerId)
             ->where('status', 'processing')
             ->exists();
@@ -93,15 +125,20 @@ class RegistrantsController extends Controller
         return view('registrants.index', [
             'event'               => $event,
             'isPaidEvent'         => $isPaidEvent,
-            'sumMinor'            => $sumMinor,
-            'commissionMinor'     => $commissionMinor,
-            'payoutMinor'         => $payoutMinor,
+
+            // Attendee total & organiser figures
+            'sumMinor'            => $sumMinor,          // what attendees paid (incl pass-through if any)
+            'commissionMinor'     => $commissionMinor,   // 0 if pass
+            'payoutMinor'         => $payoutMinor,       // organiser net before prior payouts
+            'earnedMinor'         => $earnedMinor,       // same as payoutMinor (tile display)
             'availableMinor'      => $availableMinor,
+
             'currency'            => $currency,
             'symbol'              => $symbol,
             'hasProcessingPayout' => $hasProcessingPayout,
             'isAdmin'             => $isAdmin,
             'isOwner'             => $isOwner,
+            'feeMode'             => $feeMode,           // pass to Blade for messaging
         ]);
     }
 

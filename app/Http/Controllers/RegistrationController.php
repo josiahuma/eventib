@@ -122,6 +122,12 @@ class RegistrationController extends Controller
 
             $totalQty   = (int) $lines->sum('quantity');
             $totalMajor = (float) $lines->sum('line_total');
+            $subtotalMajor = (float) $totalMajor; // for future use if we add fees/discounts
+            $feeMajor      = 0.0; // for future use if we add fees/discounts
+
+            if ($event->feeMode() === 'pass') {
+                $feeMajor = round($subtotalMajor * $event->feeRate(), 2); //per transaction fee
+            }
 
             // ❗ Duplicate gate ONLY if this is effectively a FREE registration (total = 0)
             if ($totalMajor <= 0) {
@@ -154,10 +160,11 @@ class RegistrationController extends Controller
                     'name'     => $validated['name'],
                     'email'    => $validated['email'],
                     'mobile'   => $validated['mobile'] ?? null,
-                    'status'   => $totalMajor > 0 ? 'pending' : 'free',
-                    'amount'   => $totalMajor,
+                    'status'   => $subtotalMajor > 0 ? 'pending' : 'free',
+                    'amount'   => $subtotalMajor, // organizer revenue (ticket only)
                     'currency' => $currency,
                     'quantity' => $totalQty,
+                    'platform_fee' => $feeMajor, // platform fee (if passed on)
                 ])->save();
                 $registration->items()->delete();
             } else {
@@ -167,10 +174,11 @@ class RegistrationController extends Controller
                     'name'     => $validated['name'],
                     'email'    => $validated['email'],
                     'mobile'   => $validated['mobile'] ?? null,
-                    'status'   => $totalMajor > 0 ? 'pending' : 'free',
-                    'amount'   => $totalMajor,
+                    'status'   => $subtotalMajor > 0 ? 'pending' : 'free',
+                    'amount'   => $subtotalMajor,
                     'currency' => $currency,
                     'quantity' => $totalQty,
+                    'platform_fee' => $feeMajor, // platform fee (if passed on)
                 ]);
             }
 
@@ -209,6 +217,17 @@ class RegistrationController extends Controller
                 ];
             })->values()->all();
 
+            if ($feeMajor > 0) {
+                $lineItems[] = [
+                    'price_data' => [
+                        'currency'     => $currency,
+                        'product_data' => ['name' => 'Processing fee'],
+                        'unit_amount'  => (int) round($feeMajor * 100),
+                    ],
+                    'quantity' => 1,
+                ];
+            }
+
             $session = $stripe->checkout->sessions->create([
                 'mode'                  => 'payment',
                 'payment_method_types'  => ['card'],
@@ -224,6 +243,9 @@ class RegistrationController extends Controller
                     'name'            => $validated['name'],
                     'user_id'         => (string) (Auth::id() ?? ''),
                     'quantity'        => (string) $totalQty,
+                    'subtotal_major'  => (string) $subtotalMajor,
+                    'platform_fee'    => (string) $feeMajor,
+                    'fee_mode'        => $event->feeMode(),
                 ],
             ]);
 
@@ -263,6 +285,12 @@ class RegistrationController extends Controller
             }
         }
 
+        $subtotalMajor = $isPaid ? round(($event->ticket_cost ?? 0) * $quantity, 2) : 0.0;
+        $feeMajor      = 0.0;
+        if ($isPaid && $event->feeMode() === 'pass') {
+            $feeMajor = round($subtotalMajor * $event->feeRate(), 2); //per transaction fee
+        }
+
         $quantity      = $isPaid ? (int) $request->input('quantity') : 1;
         $partyAdults   = $isPaid ? 0 : (int) ($request->input('party_adults') ?? 0);
         $partyChildren = $isPaid ? 0 : (int) ($request->input('party_children') ?? 0);
@@ -284,7 +312,8 @@ class RegistrationController extends Controller
                 'party_adults'   => $partyAdults,
                 'party_children' => $partyChildren,
                 'currency'       => $currency,
-                'amount'         => $isPaid ? (($event->ticket_cost ?? 0) * $quantity) : 0,
+                'amount'         => $subtotalMajor,
+                'platform_fee'   => $feeMajor, // platform fee (if passed on)
                 'status'         => $isPaid ? 'pending' : 'free',
             ])->save();
         } else {
@@ -295,7 +324,8 @@ class RegistrationController extends Controller
                 'email'          => $request->input('email'),
                 'mobile'         => $request->input('mobile') ?? null,
                 'status'         => $isPaid ? 'pending' : 'free',
-                'amount'         => $isPaid ? (($event->ticket_cost ?? 0) * $quantity) : 0,
+                'amount'         => $subtotalMajor,
+                'platform_fee'   => $feeMajor, // platform fee (if passed on)
                 'currency'       => $currency,
                 'quantity'       => $quantity,
                 'party_adults'   => $partyAdults,
@@ -313,18 +343,34 @@ class RegistrationController extends Controller
             return redirect()->to(route('events.register.result', ['event' => $event, 'registered' => 1]));
         }
 
+        // Build line items
+        $lineItems = [];
+        if ($isPaid) {
+            $lineItems[] = [
+                'price_data' => [
+                    'currency'     => $currency,
+                    'product_data' => ['name' => $event->name],
+                    'unit_amount'  => (int) round(($event->ticket_cost ?? 0) * 100),
+                ],
+                'quantity' => $quantity,
+            ];
+            if ($feeMajor > 0) {
+                $lineItems[] = [
+                    'price_data' => [
+                        'currency'     => $currency,
+                        'product_data' => ['name' => 'Booking fee'],
+                        'unit_amount'  => (int) round($feeMajor * 100),
+                    ],
+                    'quantity' => 1,
+                ];
+            }
+        }
+
         $stripe = new StripeClient(config('services.stripe.secret'));
         $session = $stripe->checkout->sessions->create([
             'mode'                 => 'payment',
             'payment_method_types' => ['card'],
-            'line_items'           => [[
-                'price_data' => [
-                    'currency'     => $currency,
-                    'product_data'  => ['name' => $event->name],
-                    'unit_amount'   => (int) round(($event->ticket_cost ?? 0) * 100),
-                ],
-                'quantity' => $quantity,
-            ]],
+            'line_items'           => $lineItems,
             'success_url' => route('events.register.result', ['event' => $event, 'paid' => 1]).'&session_id={CHECKOUT_SESSION_ID}',
             'cancel_url'  => route('events.register.result', ['event' => $event, 'canceled' => 1]).'&session_id={CHECKOUT_SESSION_ID}',
             'metadata'    => [
@@ -335,6 +381,9 @@ class RegistrationController extends Controller
                 'name'            => $request->input('name'),
                 'user_id'         => (string) (Auth::id() ?? ''),
                 'quantity'        => (string) $quantity,
+                'subtotal_major'  => (string) $subtotalMajor,
+                'platform_fee'    => (string) $feeMajor,
+                'fee_mode'        => $event->feeMode(),
             ],
         ]);
 
@@ -382,7 +431,6 @@ class RegistrationController extends Controller
                 if ($session && $session->payment_status === 'paid') {
                     $sessionCurrency = strtolower((string) ($session->currency ?? 'gbp'));
                     $exp             = $this->currencyExponent($sessionCurrency);
-                    $amountMajor     = ($session->amount_total ?? 0) / (10 ** $exp);
 
                     // Find the registration for this session
                     $reg = EventRegistration::where('stripe_session_id', $session->id)
@@ -397,7 +445,6 @@ class RegistrationController extends Controller
                         ->where('event_id', $event->id)
                         ->update([
                             'status'   => 'paid',
-                            'amount'   => $amountMajor,
                             'currency' => $sessionCurrency,
                         ]);
 

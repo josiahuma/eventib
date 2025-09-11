@@ -150,6 +150,7 @@ class EventController extends Controller
             $request->validate([
                 'ticket_currency' => 'required|string|in:GBP,USD,CAD,AUD,INR,NGN,KES,GHS,EUR|size:3',
                 'payout_method_id' => ['required','integer', Rule::exists('user_payout_methods', 'id')->where(fn ($q) => $q->where('user_id', Auth::id()))],
+                'fee_mode'        => 'required|in:absorb,pass',
             ]);
             $currency = strtoupper((string)$request->input('ticket_currency'));
             // country sanity check (banks)
@@ -168,6 +169,9 @@ class EventController extends Controller
             // FREE ⇒ not required; force a safe default so DB not-null columns are happy
             $currency = $currency ?: 'GBP';
         }
+
+        $feeMode = $isPaid ? ($request->input('fee_mode') ?: 'absorb') : 'absorb';
+        $feeBps  = $isPaid ? 590 : 0; // default
 
         // -------- 3) Persist --------
         $avatarUrl = $request->hasFile('avatar') ? $request->file('avatar')->store('avatars', 'public') : null;
@@ -189,6 +193,8 @@ class EventController extends Controller
             'avatar_url'       => $avatarUrl,
             'banner_url'       => $bannerUrl,
             'is_promoted'      => (bool)($validated['is_promoted'] ?? false),
+            'fee_mode'         => $feeMode,
+            'fee_bps'          => $feeBps,
         ]);
 
         if ($request->has('sessions')) {
@@ -207,35 +213,6 @@ class EventController extends Controller
         Mail::to(auth()->user()->email)->send(new EventCreatedMail($event));
 
         return redirect()->route('dashboard')->with('success', 'Event created successfully!');
-    }
-
-    public function show(Event $event)
-    {
-        $activeCats = $event->categories()->where('is_active', true)->orderBy('sort')->orderBy('id')->get();
-        $min = $activeCats->min('price');
-        $max = $activeCats->max('price');
-
-        return view('events.show', [
-            'event'      => $event,
-            'activeCats' => $activeCats,
-            'minPrice'   => $min,
-            'maxPrice'   => $max,
-        ]);
-    }
-
-    public function avatar(Event $event)
-    {
-        if (!$event->avatar_url) {
-            return redirect()->route('events.show', $event)->with('error', 'This event does not have an avatar image yet.');
-        }
-        return view('events.avatar', compact('event'));
-    }
-
-    public function edit(Event $event)
-    {
-        abort_if($event->user_id !== Auth::id(), 403);
-        $payouts = auth()->user()->payoutMethods()->get()->groupBy('country');
-        return view('events.edit', compact('event') + ['payoutsByCountry' => $payouts->toArray()]);
     }
 
     public function update(Request $request, Event $event)
@@ -282,6 +259,7 @@ class EventController extends Controller
             $request->validate([
                 'ticket_currency' => 'required|string|in:GBP,USD,CAD,AUD,INR,NGN,KES,GHS,EUR|size:3',
                 'payout_method_id' => ['required','integer', Rule::exists('user_payout_methods', 'id')->where(fn ($q) => $q->where('user_id', Auth::id()))],
+                'fee_mode'        => 'required|in:absorb,pass',
             ]);
             $currency = strtoupper((string)$request->input('ticket_currency'));
             $pm = \App\Models\UserPayoutMethod::where('id', $request->input('payout_method_id'))
@@ -319,6 +297,8 @@ class EventController extends Controller
         $event->ticket_currency  = $currency;
         $event->ticket_cost      = $hasCats ? 0 : ($validated['ticket_cost'] ?? 0);
         $event->payout_method_id = $isPaid ? ($request->input('payout_method_id') ?? null) : null;
+        $event->fee_mode         = $isPaid ? ($request->input('fee_mode') ?: 'absorb') : 'absorb';
+        $event->fee_bps          = 590; // default
         $event->save();
 
         // Sessions upsert
@@ -362,6 +342,35 @@ class EventController extends Controller
         $event->categories()->whereNotIn('id', $keepIds)->delete();
 
         return redirect()->route('dashboard')->with('success', 'Event updated successfully!');
+    }
+
+    public function show(Event $event)
+    {
+        $activeCats = $event->categories()->where('is_active', true)->orderBy('sort')->orderBy('id')->get();
+        $min = $activeCats->min('price');
+        $max = $activeCats->max('price');
+
+        return view('events.show', [
+            'event'      => $event,
+            'activeCats' => $activeCats,
+            'minPrice'   => $min,
+            'maxPrice'   => $max,
+        ]);
+    }
+
+    public function avatar(Event $event)
+    {
+        if (!$event->avatar_url) {
+            return redirect()->route('events.show', $event)->with('error', 'This event does not have an avatar image yet.');
+        }
+        return view('events.avatar', compact('event'));
+    }
+
+    public function edit(Event $event)
+    {
+        abort_if($event->user_id !== Auth::id(), 403);
+        $payouts = auth()->user()->payoutMethods()->get()->groupBy('country');
+        return view('events.edit', compact('event') + ['payoutsByCountry' => $payouts->toArray()]);
     }
 
     public function destroy(Event $event)

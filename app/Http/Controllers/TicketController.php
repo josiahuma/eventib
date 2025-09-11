@@ -288,7 +288,21 @@ class TicketController extends Controller
 
             $already = (bool) $ticket->checked_in_at;
             if (!$already) {
-                $ticket->forceFill(['checked_in_at' => now(), 'checked_in_by' => $u->id])->save();
+                $now = now();
+
+                // 1) mark the ticket
+                $ticket->forceFill([
+                    'checked_in_at' => $now,
+                    'checked_in_by' => $u->id,
+                ])->save();
+
+                // 2) also stamp the parent registration (first time only)
+                \App\Models\EventRegistration::where('id', $ticket->registration_id)
+                    ->whereNull('checked_in_at')
+                    ->update([
+                        'checked_in_at' => $now,
+                        'checked_in_by' => $u->id,
+                    ]);
             }
 
             return response()->json([

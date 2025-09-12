@@ -24,6 +24,6 @@
 </p>
 
 <p>
-    Why not consider signing up for an OviEvent account? It makes managing your events/tickets easier.
+    Why not consider signing up for an Eventib account? It makes managing your events/tickets easier.
     <a href="{{ route('register') }}">Create an account</a>
 </p>

@@ -96,7 +96,6 @@
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
                     <div class="flex items-center justify-between">
                         <h3 class="text-lg font-semibold text-gray-900">Ticket types</h3>
-                        <button type="button" id="add-cat" class="px-3 py-1.5 text-sm rounded-md border bg-white hover:bg-gray-50">Add</button>
                     </div>
                     <p class="text-sm text-gray-600 mt-2">
                         Create one or more tickets (e.g., Standard, VIP, Early Bird). At least one is required.
@@ -211,7 +210,9 @@
                             </div>
                         </div>
                     </template>
-
+                    <button type="button" id="add-cat" class="mt-3 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700">
+                       + Add another ticket type
+                    </button>
                 </div>
 
                 {{-- Fee handling (paid only) --}}

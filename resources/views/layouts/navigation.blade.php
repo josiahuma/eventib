@@ -14,12 +14,13 @@
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('how')" :active="request()->routeIs('how')">How it works</x-nav-link>
                     <x-nav-link :href="route('pricing')" :active="request()->routeIs('pricing')">Pricing</x-nav-link>
-
+                    <x-nav-link :href="route('about')" :active="request()->routeIs('about')">About</x-nav-link>
                     @auth
                         <x-nav-link :href="route('my.tickets')" :active="request()->routeIs('my.tickets*')">My Tickets</x-nav-link>
                         <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">Manage Events</x-nav-link>
                         <x-nav-link :href="route('events.create')" :active="request()->routeIs('events.create')">Create Events</x-nav-link>
                     @endauth
+                    <x-nav-link :href="route('contact')" :active="request()->routeIs('contact')">Contact</x-nav-link>
                 </div>
             </div>
 
@@ -109,12 +110,14 @@
                 <div class="space-y-1">
                     <x-responsive-nav-link :href="route('how')" :active="request()->routeIs('how')">How it works</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('pricing')" :active="request()->routeIs('pricing')">Pricing</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('about')" :active="request()->routeIs('about')">About</x-responsive-nav-link>
 
                     @auth
                         <x-responsive-nav-link :href="route('my.tickets')" :active="request()->routeIs('my.tickets*')">My Tickets</x-responsive-nav-link>
                         <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">Manage Events</x-responsive-nav-link>
                         <x-responsive-nav-link :href="route('events.create')" :active="request()->routeIs('events.create')">Create Events</x-responsive-nav-link>
                     @endauth
+                    <x-responsive-nav-link :href="route('contact')" :active="request()->routeIs('contact')">Contact</x-responsive-nav-link>
                 </div>
 
                 @auth

@@ -48,6 +48,10 @@ Route::get('/', [EventController::class, 'publicIndex'])->name('homepage');
 Route::get('/how-it-works', [PageController::class, 'how'])->name('how');
 Route::get('/pricing', [PageController::class, 'pricing'])->name('pricing');
 
+Route::get('/about', [PageController::class, 'about'])->name('about');
+Route::get('/contact', [PageController::class, 'contact'])->name('contact');
+Route::post('/contact', [PageController::class, 'contactSubmit'])->name('contact.submit');
+
 /* Stripe webhook */
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
 

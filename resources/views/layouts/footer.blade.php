@@ -18,7 +18,7 @@
         </div>
 
         {{-- Main links --}}
-        <div class="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-8">
+        <div class="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-8">
             {{-- Brand + social --}}
             <div class="lg:col-span-2 space-y-3">
                 <a href="{{ route('homepage') }}" class="inline-block">
@@ -68,14 +68,14 @@
             <div>
                 <h4 class="text-sm font-semibold uppercase tracking-wider text-white/90">Company</h4>
                 <ul class="mt-3 space-y-2 text-sm">
-                    <li><a href="mailto:hello@eventib.com" class="hover:underline">Contact</a></li>
-                    <li><a href="#" class="hover:underline">About</a></li>
+                    <li><a href="{{ route('contact') }}" class="hover:underline">Contact</a></li>
+                    <li><a href="{{ route('about') }}" class="hover:underline">About</a></li>
                     <li><a href="#" class="hover:underline">Blog</a></li>
                 </ul>
             </div>
 
             {{-- Newsletter --}}
-            <div>
+            <div class="lg:col-span-2">
                 <h4 class="text-sm font-semibold uppercase tracking-wider text-white/90">Stay in the loop</h4>
                 <form class="mt-3" method="post" action="#">
                     @csrf

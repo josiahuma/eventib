@@ -178,27 +178,27 @@
                     {{-- template for adding new rows on Edit --}}
                     <template id="cat-tpl">
                         <div class="cat-row rounded-lg border border-gray-200 p-3">
-                            <input type="hidden" name="_IDX_[id]" value="">
+                            <input type="hidden" name="__IDX__[id]" value="">
                             <div class="grid grid-cols-1 sm:grid-cols-12 sm:gap-3">
                                 <div class="sm:col-span-5">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Ticket name</label>
-                                    <input name="_IDX_[name]" class="w-full rounded-lg border-gray-300" placeholder="e.g., VIP">
+                                    <input name="__IDX__[name]" class="w-full rounded-lg border-gray-300" placeholder="e.g., VIP">
                                 </div>
                                 <div class="sm:col-span-3 mt-3 sm:mt-0">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Price</label>
-                                    <input type="number" step="0.01" min="0" name="_IDX_[price]" class="w-full rounded-lg border-gray-300" placeholder="0.00">
+                                    <input type="number" step="0.01" min="0" name="__IDX__[price]" class="w-full rounded-lg border-gray-300" placeholder="0.00">
                                 </div>
-                                <div class="sm:col-span-2 mt-3 sm:mt-0">
+                                <div class="sm:col-span-3 mt-3 sm:mt-0">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Capacity (optional)</label>
-                                    <input type="number" min="0" name="_IDX_[capacity]" class="w-full rounded-lg border-gray-300" placeholder="e.g., 100">
+                                    <input type="number" min="0" name="__IDX__[capacity]" class="w-full rounded-lg border-gray-300" placeholder="e.g., 100">
                                 </div>
-                                <div class="sm:col-span-2 mt-3 sm:mt-0">
+                                <div class="sm:col-span-1 mt-3 sm:mt-0">
                                     <label class="block text-sm font-medium text-gray-700 mb-1">Sort</label>
-                                    <input type="number" min="0" name="_IDX_[sort]" value="0" class="w-full rounded-lg border-gray-300" placeholder="0">
+                                    <input type="number" min="0" name="__IDX__[sort]" value="0" class="w-full rounded-lg border-gray-300" placeholder="0">
                                 </div>
                                 <div class="sm:col-span-12 mt-3 flex items-center justify-between">
                                     <label class="inline-flex items-center gap-2 text-sm">
-                                        <input type="checkbox" name="_IDX_[is_active]" value="1" checked class="rounded border-gray-300">
+                                        <input type="checkbox" name="__IDX__[is_active]" value="1" checked class="rounded border-gray-300">
                                         <span class="text-gray-700">Active</span>
                                     </label>
                                     <button type="button" class="remove-cat text-rose-600 text-sm">Remove</button>
@@ -206,6 +206,7 @@
                             </div>
                         </div>
                     </template>
+
                 </div>
 
                 {{-- Fee handling (paid only, READ-ONLY on edit) --}}
@@ -612,6 +613,41 @@
             renumber();
         })();
 
+        // Ticket types UI add/remove
+        (function () {
+            const wrap = document.getElementById('cat-rows');
+            const tpl  = document.getElementById('cat-tpl')?.innerHTML || '';
+            const add  = document.getElementById('add-cat');
+
+            // Find next numeric index by scanning existing inputs
+            function nextIndex() {
+                let max = -1;
+                wrap.querySelectorAll('input[name^="categories["]').forEach(inp => {
+                    const m = inp.name.match(/^categories\[(\d+)\]/);
+                    if (m) max = Math.max(max, parseInt(m[1], 10));
+                });
+                return max + 1;
+            }
+
+            function wireRemove() {
+                wrap.querySelectorAll('.remove-cat').forEach(btn => {
+                    btn.onclick = () => btn.closest('.cat-row')?.remove();
+                });
+            }
+
+            add?.addEventListener('click', () => {
+                const idx = nextIndex();
+                // Replace the token with a real categories[...] prefix
+                const html = tpl.replaceAll('__IDX__', `categories[${idx}]`);
+                const div = document.createElement('div');
+                div.innerHTML = html.trim();
+                wrap.appendChild(div.firstElementChild);
+                wireRemove();
+            });
+
+            wireRemove();
+        })();
+
         // Google Places
         window.initPlaces = function () {
             const input = document.getElementById('location-input');
@@ -636,28 +672,6 @@
                 if (place.formatted_address) input.value = place.formatted_address;
             });
         };
-
-        // Ticket types UI add/remove
-        (function () {
-            const wrap = document.getElementById('cat-rows');
-            const tpl  = document.getElementById('cat-tpl')?.innerHTML || '';
-            const add  = document.getElementById('add-cat');
-            let i = wrap ? wrap.querySelectorAll('.cat-row').length : 0;
-
-            function wireRemove() {
-                wrap?.querySelectorAll('.remove-cat').forEach(btn => {
-                    btn.onclick = () => btn.closest('.cat-row')?.remove();
-                });
-            }
-            add?.addEventListener('click', () => {
-                const html = tpl.replaceAll('__IDX__', `categories[${i++}]`);
-                const div = document.createElement('div');
-                div.innerHTML = html.trim();
-                wrap.appendChild(div.firstElementChild);
-                wireRemove();
-            });
-            wireRemove();
-        })();
     </script>
 
     @if (config('services.google.maps_key'))

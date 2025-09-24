@@ -3,9 +3,18 @@
 
         {{-- Organizer Profile Card --}}
         <div class="bg-white rounded-xl shadow-xl p-10 text-center">
-            <img src="{{ $organizer->avatar_url ? asset('storage/' . $organizer->avatar_url) : asset('default-avatar.png') }}"
-                 alt="{{ $organizer->name }}"
-                 class="w-24 h-24 mx-auto rounded-full object-cover border-4 border-white shadow -mt-16">
+            <div class="w-24 h-24 mx-auto rounded-full border-4 border-white shadow -mt-16 flex items-center justify-center bg-indigo-100 overflow-hidden">
+                @if ($organizer->avatar_url)
+                    <img src="{{ asset('storage/' . $organizer->avatar_url) }}"
+                        alt="{{ $organizer->name }}"
+                        class="w-full h-full object-cover">
+                @else
+                    <span class="text-indigo-700 text-3xl font-bold">
+                        {{ strtoupper(substr($organizer->name, 0, 1)) }}
+                    </span>
+                @endif
+            </div>
+
 
             <h1 class="text-3xl font-extrabold mt-4">{{ $organizer->name }}</h1>
 

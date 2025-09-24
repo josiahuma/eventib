@@ -13,6 +13,8 @@ use App\Models\EventUnlock; // only if you use the unlock flow
 use App\Mail\NewRegistrationNotificationMail;
 use App\Mail\RegistrationConfirmedMail;
 use App\Mail\OrganizerNewRegistrationMail;
+use App\Mail\UnlockPurchasedUserMail;
+use App\Mail\UnlockPurchasedAdminMail;
 
 class StripeWebhookController extends Controller
 {
@@ -61,6 +63,19 @@ class StripeWebhookController extends Controller
                         ]
                     );
                 }
+
+                // load user
+                $user = \App\Models\User::find($userId);
+                if ($user) {
+                    Mail::to($user->email)->queue(
+                        new UnlockPurchasedUserMail($user->name, $data['amount_total'], strtoupper($data['currency']), $data['receipt_url'] ?? '')
+                    );
+                }
+
+                // notify ops
+                Mail::to(config('mail.ops_address'))->queue(
+                    new UnlockPurchasedAdminMail($user?->email ?? 'unknown', $data['amount_total'], strtoupper($data['currency']), $data['id'] ?? '')
+                );
                 return response('ok', 200);
             }
 

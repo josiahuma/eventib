@@ -16,6 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })
+    ->withSchedule(function (Illuminate\Console\Scheduling\Schedule $schedule) {
+        $schedule->command('queue:work --stop-when-empty --sleep=3 --tries=3 --max-time=300')
+            ->everyMinute()
+            ->withoutOverlapping();
+    })
     ->withProviders([
         App\Providers\AppServiceProvider::class,
         App\Providers\EventServiceProvider::class, // ← add this line

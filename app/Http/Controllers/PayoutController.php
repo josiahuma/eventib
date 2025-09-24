@@ -7,6 +7,8 @@ use App\Models\EventPayout;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\PayoutRequestedAdminMail;
 
 class PayoutController extends Controller
 {
@@ -125,6 +127,8 @@ class PayoutController extends Controller
                 'iban'           => $validated['iban'] ?? null,
                 'status'         => 'processing',
             ]);
+
+            Mail::to(config('mail.ops_address'))->queue(new PayoutRequestedAdminMail($payout));
 
             return redirect()
                 ->route('payouts.index')

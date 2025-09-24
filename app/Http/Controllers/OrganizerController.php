@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ContactOrganizerMail;
+use App\Mail\OrganizerFollowedMail;
 
 class OrganizerController extends Controller
 {
@@ -64,6 +65,13 @@ class OrganizerController extends Controller
     {
         $user = auth()->user();
         $user->followedOrganizers()->syncWithoutDetaching([$organizer->id]);
+
+        // ✨ Hook point
+        if ($organizer->user?->email) {
+            Mail::to($organizer->user->email)->queue(
+                new OrganizerFollowedMail($organizer, $user)
+            );
+        }
 
         return back()->with('success', 'You are now following this organizer.');
     }

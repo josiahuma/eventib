@@ -115,4 +115,8 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    // add near the bottom (return array)
+    'ops_address' => env('OPS_EMAIL', 'info@eventib.com'),
+    'ops_name' => env('OPS_NAME', 'Eventib Support'),
+
 ];

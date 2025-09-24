@@ -1,4 +1,6 @@
-<p>Hi {{ $event->organizer ?: ($event->user?->name ?: 'there') }},</p>
+<p>
+    Hi {{ $event->organizer?->name ?? $event->user?->name ?? 'there' }},
+</p>
 
 <p>Your event <strong>{{ $event->name }}</strong> has been created.</p>
 

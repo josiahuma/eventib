@@ -53,5 +53,23 @@ class User extends Authenticatable
 
     public function payoutMethods() { return $this->hasMany(\App\Models\UserPayoutMethod::class); }
 
+    public function followedOrganizers()
+    {
+        return $this->belongsToMany(Organizer::class, 'followed_organizers');
+    }
+
+    public function organizer()
+    {
+        return $this->hasOne(Organizer::class, 'user_id');
+    }
+
+    public function organizers()
+    {
+        return $this->hasMany(Organizer::class, 'user_id');
+    }
+
+
+
+
 
 }

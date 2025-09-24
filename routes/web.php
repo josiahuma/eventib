@@ -23,6 +23,7 @@ use App\Http\Controllers\TicketController;
 use App\Http\Controllers\CheckinsController;
 use App\Http\Controllers\Admin\HomepageSlideController; // <-- add this
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\OrganizerController;
 
 /*
 |--------------------------------------------------------------------------
@@ -51,6 +52,13 @@ Route::get('/pricing', [PageController::class, 'pricing'])->name('pricing');
 Route::get('/about', [PageController::class, 'about'])->name('about');
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
 Route::post('/contact', [PageController::class, 'contactSubmit'])->name('contact.submit');
+Route::get('/terms', [PageController::class, 'terms'])->name('terms');
+Route::get('/privacy', [PageController::class, 'privacy'])->name('privacy');
+Route::get('/cookies', [PageController::class, 'cookies'])->name('cookies');
+Route::get('/organizers/{organizer}', [OrganizerController::class, 'show'])->name('organizers.show');
+Route::post('/organizers/{organizer}/contact', [OrganizerController::class, 'contact'])->name('organizers.contact');
+
+
 
 /* Stripe webhook */
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle'])->name('stripe.webhook');
@@ -125,6 +133,18 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/events/{event}/payouts/new', [PayoutController::class, 'create'])->name('payouts.create');
     Route::post('/events/{event}/payouts', [PayoutController::class, 'store'])->name('payouts.store');
 
+    // Organizers management
+    Route::get('/dashboard/organizers', [OrganizerController::class, 'index'])->name('organizers.index');
+    Route::get('/dashboard/organizers/create', [OrganizerController::class, 'create'])->name('organizers.create');
+    Route::post('/dashboard/organizers', [OrganizerController::class, 'store'])->name('organizers.store');
+    Route::get('/dashboard/organizers/{organizer}/edit', [OrganizerController::class, 'edit'])->name('organizers.edit');
+    Route::post('/organizers/{organizer}/follow', [OrganizerController::class, 'follow'])
+    ->middleware('auth')->name('organizers.follow');
+    Route::post('/organizers/{organizer}/unfollow', [OrganizerController::class, 'unfollow'])
+    ->middleware('auth')->name('organizers.unfollow');
+    Route::get('/organizers/{organizer}/edit', [OrganizerController::class, 'edit'])->name('organizers.edit');
+    Route::put('/organizers/{organizer}', [OrganizerController::class, 'update'])->name('organizers.update');
+
     // Email registrants
     Route::get('/events/{event}/registrants/email', [RegistrantEmailController::class, 'create'])->name('events.registrants.email');
     Route::post('/events/{event}/registrants/email', [RegistrantEmailController::class, 'send'])->name('events.registrants.email.send');
@@ -181,5 +201,12 @@ Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap')
 Route::get('/events/{event}', [EventController::class, 'show'])
     ->where('event', '^(?!create$).+')
     ->name('events.show');
+
+
+Route::post('/store-redirect', function (Illuminate\Http\Request $request) {
+    session(['url.intended' => $request->redirect_to]);
+    return redirect()->route('login');
+})->name('store.redirect');
+
 
 require __DIR__.'/auth.php';

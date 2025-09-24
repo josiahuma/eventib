@@ -14,8 +14,8 @@ return new class extends Migration
         Schema::create('social_accounts', function (Blueprint $table) {
         $table->id();
         $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-        $table->string('provider');               // 'google', 'github', etc.
-        $table->string('provider_id');            // sub/id from provider
+        $table->string('provider',100);               // 'google', 'github', etc.
+        $table->string('provider_id',100);            // sub/id from provider
         $table->string('avatar')->nullable();
         $table->string('token', 1024)->nullable();
         $table->string('refresh_token', 1024)->nullable();

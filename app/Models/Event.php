@@ -12,7 +12,7 @@ class Event extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id','name','organizer','category','tags','location','description',
+        'user_id','name','organizer_id','category','tags','location','description',
         'avatar_url','banner_url','ticket_cost','is_promoted','public_id',
         'ticket_currency','payout_method_id', 'is_disabled',
         'fee_mode', 'fee_bps',
@@ -117,5 +117,11 @@ class Event extends Model
     {
         return (float) $this->attendees()->where('status', 'paid')->sum('amount');
     }
+
+    public function organizer()
+    {
+        return $this->belongsTo(Organizer::class);
+    }
+
 
 }

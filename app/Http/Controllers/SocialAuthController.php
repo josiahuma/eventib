@@ -62,7 +62,6 @@ class SocialAuthController extends Controller
             // Use stateless to avoid invalid_state issues behind proxies/CDNs.
             $socialUser = Socialite::driver($provider)
                 ->redirectUrl($callback)
-                ->stateless()
                 ->user();
         } catch (\Throwable $e) {
             Log::error("{$provider} OAuth callback error", ['exception' => $e]);
@@ -121,6 +120,9 @@ class SocialAuthController extends Controller
         );
 
         Auth::login($user, remember: true);
+        logger()->info('User logged in', ['id' => $user->id]);
+
         return redirect()->intended(route('homepage'));
+
     }
 }

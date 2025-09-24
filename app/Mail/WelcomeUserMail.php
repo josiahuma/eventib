@@ -15,7 +15,7 @@ class WelcomeUserMail extends Mailable
 
     public function build()
     {
-        return $this->subject('Welcome to Ovievent 🎉')
+        return $this->subject('Welcome to Eventib 🎉')
             ->view('emails.welcome-user');
     }
 }

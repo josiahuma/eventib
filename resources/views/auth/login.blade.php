@@ -32,6 +32,10 @@
                 <form method="POST" action="{{ route('login') }}" class="space-y-4">
                     @csrf
 
+                    @if(request()->has('redirect'))
+                        <input type="hidden" name="redirect" value="{{ request('redirect') }}">
+                    @endif
+
                     {{-- Email --}}
                     <div>
                         <x-input-label for="email" :value="__('Email')" />

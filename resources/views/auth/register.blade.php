@@ -28,6 +28,10 @@
                 {{-- Form --}}
                 <form method="POST" action="{{ route('register') }}" class="space-y-4">
                     @csrf
+                    @if(request()->has('redirect'))
+                        <input type="hidden" name="redirect" value="{{ request('redirect') }}">
+                    @endif
+
 
                     {{-- Name --}}
                     <div>

@@ -151,7 +151,7 @@
                         @if ($event->organizer)
                             <span class="inline-flex items-center gap-1.5">
                                 <svg class="h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4 0-8 2-8 6v1h16v-1c0-4-4-6-8-6z"/></svg>
-                                Organized by <span class="font-medium text-gray-800">{{ $event->organizer }}</span>
+                                Organized by <a href="{{ route('organizers.show', $event->organizer->slug) }}" class="text-indigo-600 hover:underline">{{ $event->organizer->name }}</a>
                             </span>
                         @endif
                         @if ($event->location)
@@ -288,19 +288,8 @@
                         </div>
                     </div>
 
-                    @if ($event->organizer)
-                        <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-                            <div class="flex items-center gap-3">
-                                <div class="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center">
-                                    <span class="text-indigo-700 text-sm font-semibold">{{ strtoupper(substr($event->organizer, 0, 1)) }}</span>
-                                </div>
-                                <div>
-                                    <div class="text-sm text-gray-500">Organizer</div>
-                                    <div class="text-base font-medium text-gray-900">{{ $event->organizer }}</div>
-                                </div>
-                            </div>
-                        </div>
-                    @endif
+                    {{-- Organizer card --}}
+                    <x-organizer-card :organizer="$event->organizer" />
                 </div>
             </div>
         </div>

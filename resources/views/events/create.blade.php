@@ -299,7 +299,11 @@
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Organizer</label>
-                            <input type="text" name="organizer" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500" placeholder="Organization or person">
+                                <select name="organizer_id" required>
+                                    @foreach($organizers as $organizer)
+                                        <option value="{{ $organizer->id }}">{{ $organizer->name }}</option>
+                                    @endforeach
+                                </select>
                         </div>
 
                         <div>

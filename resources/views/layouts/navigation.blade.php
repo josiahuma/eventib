@@ -50,6 +50,21 @@
                             <x-dropdown-link :href="route('profile.edit')">Profile</x-dropdown-link>
                             <x-dropdown-link :href="route('my.tickets')">My Tickets</x-dropdown-link>
                             <x-dropdown-link :href="route('profile.payouts')">Add Payout methods</x-dropdown-link>
+                            {{-- Inside <x-slot name="content"> in the dropdown --}}
+                            @if(Auth::user()->is_admin || !Auth::user()->organizer)
+                                <x-dropdown-link :href="route('organizers.create')">
+                                    Create Organizer
+                                </x-dropdown-link>
+                            @endif
+
+                            @if(Auth::user()->organizer)
+                                <x-dropdown-link :href="route('organizers.edit', Auth::user()->organizer->slug)">
+                                    Edit Organizer
+                                </x-dropdown-link>
+                            @endif
+
+                            <div class="my-1 border-t border-gray-100"></div>
+
 
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf
@@ -138,6 +153,18 @@
 
                             <x-responsive-nav-link :href="route('profile.edit')">Profile</x-responsive-nav-link>
                             <x-responsive-nav-link :href="route('profile.payouts')">Add Payout methods</x-responsive-nav-link>
+                            @if(Auth::user()->is_admin || !Auth::user()->organizer)
+                                <x-responsive-nav-link :href="route('organizers.create')">
+                                    Create Organizer
+                                </x-responsive-nav-link>
+                            @endif
+
+                            @if(Auth::user()->organizer)
+                                <x-responsive-nav-link :href="route('organizers.edit', Auth::user()->organizer->slug)">
+                                    Edit Organizer
+                                </x-responsive-nav-link>
+                            @endif
+
 
                             <form method="POST" action="{{ route('logout') }}">
                                 @csrf

@@ -93,19 +93,39 @@ class EventController extends Controller
 
     public function create()
     {
+        $user = auth()->user();
+        if (!$user) {
+            return redirect()->route('login');
+        }
+        $organizers = $user->organizers ?? \App\Models\Organizer::where('user_id', $user->id)->get();
+
+        if ($organizers->isEmpty()) {
+            return redirect()->route('organizers.create')->with('error', 'Please create an organizer profile before creating an event.');
+        }
+
         $payouts = auth()->user()
             ? auth()->user()->payoutMethods()->get()->groupBy('country')
             : collect();
 
-        return view('events.create', ['payoutsByCountry' => $payouts->toArray()]);
+        $organizers = \App\Models\Organizer::where('user_id', auth()->id())->get();
+
+        return view('events.create', [
+            'payoutsByCountry' => $payouts->toArray(),
+            'organizers'       => $organizers,
+        ]);
     }
+
 
     public function store(Request $request)
     {
         // -------- 1) Base validation (no currency/payout requirements yet) --------
         $validated = $request->validate([
             'name'            => 'required|string|max:255',
-            'organizer'       => 'nullable|string|max:255',
+            'organizer_id' => [
+                'required',
+                'integer',
+                Rule::exists('organizers', 'id')->where(fn ($q) => $q->where('user_id', Auth::id())),
+            ],
             'category'        => 'nullable|string|max:100',
             'tags'            => 'nullable|array',
             'tags.*'          => 'string|max:50',
@@ -182,7 +202,7 @@ class EventController extends Controller
         $event = Event::create([
             'user_id'          => Auth::id(),
             'name'             => $validated['name'],
-            'organizer'        => $validated['organizer'] ?? null,
+            'organizer_id' => $validated['organizer_id'],
             'category'         => $validated['category'] ?? null,
             'tags'             => json_encode($tagsArray),
             'location'         => $validated['location'] ?? null,
@@ -222,7 +242,11 @@ class EventController extends Controller
         // base validation
         $validated = $request->validate([
             'name'        => 'required|string|max:255',
-            'organizer'   => 'nullable|string|max:255',
+            'organizer_id' => [
+                    'required',
+                    'integer',
+                    Rule::exists('organizers', 'id')->where(fn ($q) => $q->where('user_id', Auth::id())),
+                ],
             'category'    => 'nullable|string|max:100',
             'tags'        => 'nullable|array',
             'tags.*'      => 'string|max:50',
@@ -289,7 +313,7 @@ class EventController extends Controller
         $tagsArray = is_array($validated['tags'] ?? null) ? $validated['tags'] : [];
 
         $event->name             = $validated['name'];
-        $event->organizer        = $validated['organizer'] ?? null;
+        $event->organizer_id = $validated['organizer_id'];
         $event->category         = $validated['category'] ?? null;
         $event->tags             = json_encode($tagsArray);
         $event->location         = $validated['location'] ?? null;
@@ -346,6 +370,7 @@ class EventController extends Controller
 
     public function show(Event $event)
     {
+        $event->load('organizer'); // Add this line
         $activeCats = $event->categories()->where('is_active', true)->orderBy('sort')->orderBy('id')->get();
         $min = $activeCats->min('price');
         $max = $activeCats->max('price');

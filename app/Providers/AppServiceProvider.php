@@ -8,6 +8,8 @@ use Illuminate\Auth\Events\Registered;
 use App\Listeners\SendWelcomeEmail;
 use App\Models\EventRegistration;
 use App\Observers\EventRegistrationObserver;
+use Illuminate\Support\Facades\Schema;
+
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -26,5 +28,7 @@ class AppServiceProvider extends ServiceProvider
     {
         //
         EventRegistration::observe(EventRegistrationObserver::class);
+        Schema::defaultStringLength(191);
+
     }
 }

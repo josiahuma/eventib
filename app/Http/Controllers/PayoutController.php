@@ -116,7 +116,8 @@ class PayoutController extends Controller
                     ->with('error', 'Requested amount exceeds what is currently available. Please try again.');
             }
 
-            EventPayout::create([
+            // ⬇️ Capture the created payout
+            $payout = EventPayout::create([
                 'event_id'       => $event->id,
                 'user_id'        => Auth::id(),
                 'amount'         => (int) $validated['amount'],
@@ -128,13 +129,20 @@ class PayoutController extends Controller
                 'status'         => 'processing',
             ]);
 
-            Mail::to(config('mail.ops_address'))->queue(new PayoutRequestedAdminMail($payout));
+            // Notify ops safely
+            $ops = config('mail.ops_address') ?: 'info@eventib.com';
+            try {
+                Mail::to($ops)->queue(new PayoutRequestedAdminMail($payout));
+            } catch (\Throwable $e) {
+                \Log::warning('Payout ops email failed', ['error' => $e->getMessage()]);
+            }
 
             return redirect()
                 ->route('payouts.index')
                 ->with('success', 'Payout request submitted and marked as processing.');
         });
     }
+
 
     /** Helper: compute current available (minor units) and currency for an event. */
     private function availableForEvent(Event $event): array

@@ -210,38 +210,10 @@
                         @endif
                     </div>
 
-                    <div class="mt-4 space-y-3 text-base">
-                        {{-- Date --}}
-                        <div class="flex items-center gap-2 text-gray-700">
-                            <svg class="h-5 w-5 text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v3H3V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1z"/><path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/></svg>
-                            @if ($nextDateForChip)
-                                <span>{{ \Carbon\Carbon::parse($nextDateForChip)->format('d M Y') }}</span>
-                            @else
-                                <span>Dates TBA</span>
-                            @endif
-                        </div>
-
-                        {{-- Location --}}
-                        @if ($event->location)
-                            <div class="flex items-start gap-2 text-gray-700">
-                                <svg class="h-5 w-5 text-indigo-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"/></svg>
-                                <div>
-                                    <div>{{ $event->location }}</div>
-                                    <a href="https://www.google.com/maps/search/?api=1&query={{ urlencode($event->location) }}"
-                                       target="_blank"
-                                       rel="noopener"
-                                       class="text-indigo-600 font-medium hover:underline">
-                                        Get Directions
-                                    </a>
-                                </div>
-                            </div>
-                        @endif
-                    </div>
-
-                    {{-- Register --}}
+                    {{-- Register button directly under price --}}
                     @if ($hasUpcoming)
                         <a href="{{ route('events.register', $event) }}"
-                           class="mt-5 inline-flex items-center justify-center w-full rounded-lg bg-indigo-600 text-white px-4 py-3 font-semibold text-lg hover:bg-indigo-700">
+                        class="mt-5 inline-flex items-center justify-center w-full rounded-lg bg-indigo-600 text-white px-4 py-3 font-semibold text-lg hover:bg-indigo-700">
                             Register
                         </a>
                     @else
@@ -250,49 +222,86 @@
                         </span>
                     @endif
 
+                    {{-- Date & Location --}}
+                    <div class="mt-6 space-y-4">
+                        {{-- Date --}}
+                        <div class="flex items-center gap-2 text-gray-700">
+                            <svg class="h-5 w-5 text-gray-500" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v3H3V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1z"/>
+                                <path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/>
+                            </svg>
+                            @if ($nextDateForChip)
+                                <span class="text-base md:text-lg">{{ \Carbon\Carbon::parse($nextDateForChip)->format('d M Y') }}</span>
+                            @else
+                                <span class="text-base md:text-lg">Dates TBA</span>
+                            @endif
+                        </div>
+
+                        {{-- Location --}}
+                        @if ($event->location)
+                            <div class="flex items-start gap-2 text-gray-700">
+                                <svg class="h-5 w-5 text-gray-500 mt-0.5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2c-3.866 0-7 3.134-7 7 0 5.25 7 13 7 13s7-7.75 7-13c0-3.866-3.134-7-7-7zm0 10a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/>
+                                </svg>
+                                <div>
+                                    <div class="text-base md:text-lg">{{ $event->location }}</div>
+                                    <a href="https://www.google.com/maps/search/?api=1&query={{ urlencode($event->location) }}"
+                                    target="_blank" rel="noopener"
+                                    class="mt-1 inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 text-base md:text-lg font-medium">
+                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M14 3h7v7h-2V6.41l-9.29 9.3-1.42-1.42L17.59 5H14V3z"/>
+                                        </svg>
+                                        <span>Get Directions</span>
+                                    </a>
+                                </div>
+                            </div>
+                        @endif
+                    </div>
+
                     {{-- Secondary actions --}}
                     <div class="mt-6 border-t border-gray-200 pt-4 space-y-3">
                         @auth
-                            <a href="{{ route('my.tickets') }}" 
-                            class="flex items-center gap-2 text-gray-700 hover:text-green-600 font-medium">
-                                <svg class="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M5 4h14a2 2 0 012 2v2a2 2 0 01-2 2h-1l-2 3-2-3H5a2 2 0 01-2-2V6a2 2 0 012-2z"/>
-                                    <path d="M5 12h14v8H5z"/>
+                            <a href="{{ route('my.tickets') }}"
+                            class="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-base md:text-lg">
+                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M3 7h18v4a2 2 0 0 1 0 4v4H3v-4a2 2 0 0 1 0-4V7z"/>
                                 </svg>
-                                Manage my tickets
+                                <span>Already registered? Manage your booking</span>
                             </a>
                         @else
-                            <a href="{{ $manageUrl }}" 
-                            class="flex items-center gap-2 text-gray-700 hover:text-green-600 font-medium">
-                                <svg class="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M5 4h14a2 2 0 012 2v2a2 2 0 01-2 2h-1l-2 3-2-3H5a2 2 0 01-2-2V6a2 2 0 012-2z"/>
-                                    <path d="M5 12h14v8H5z"/>
+                            <a href="{{ $manageUrl }}"
+                            class="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-base md:text-lg">
+                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M3 7h18v4a2 2 0 0 1 0 4v4H3v-4a2 2 0 0 1 0-4V7z"/>
                                 </svg>
-                                Already registered? Manage your booking
+                                <span>Already registered? Manage your booking</span>
                             </a>
                         @endauth
 
                         @if ($event->avatar_url)
-                            <a href="{{ route('events.avatar', $event) }}" 
-                            class="flex items-center gap-2 text-gray-700 hover:text-amber-600 font-medium">
-                                <svg class="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M12 5a7 7 0 100 14 7 7 0 000-14zm0 2a5 5 0 110 10A5 5 0 0112 7z"/>
-                                    <path d="M4 20h16v2H4z"/>
+                            <a href="{{ route('events.avatar', $event) }}"
+                            class="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-base md:text-lg">
+                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M4 7a2 2 0 0 1 2-2h2l1.5-2h5L16 5h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z"/>
+                                    <circle cx="12" cy="12" r="3.2"/>
                                 </svg>
-                                Create Personal Display Picture
+                                <span>Create Personal Display Picture</span>
                             </a>
                         @endif
 
-                        <button onclick="shareEvent()" 
-                                class="flex items-center gap-2 text-gray-700 hover:text-blue-600 font-medium w-full text-left">
-                            <svg class="h-5 w-5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M4 12v-2a8 8 0 1116 0v2l2 2v6H2v-6l2-2zm2 2h12v4H6v-4z"/>
+                        <button onclick="shareEvent()"
+                                class="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium text-base md:text-lg w-full text-left">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 3l4 4h-3v6h-2V7H8l4-4z"/>
+                                <path d="M5 10h14v10H5z"/>
                             </svg>
-                            Share Event
+                            <span>Share Event</span>
                         </button>
                     </div>
-
                 </div>
+
+
+
 
                 {{-- Organizer card --}}
                 <x-organizer-card :organizer="$event->organizer" />

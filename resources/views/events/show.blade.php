@@ -22,7 +22,6 @@
         $sym = $symbols[$cur] ?? '';
 
         // ---- PRICE LABEL (use categories if present, otherwise Free) ----
-        // Controller passes $activeCats, $minPrice, $maxPrice
         $hasCats = isset($activeCats) && $activeCats->count() > 0;
         if ($hasCats) {
             $min = isset($minPrice) ? (float)$minPrice : (float)$activeCats->min('price');
@@ -45,20 +44,21 @@
         $nextFuture = $sortedSessions->first(function($s){
             return \Carbon\Carbon::parse($s->session_date)->isFuture();
         });
-        // ISO string for JS
         $countdownIso = $nextFuture ? \Carbon\Carbon::parse($nextFuture->session_date)->toIso8601String() : null;
 
-        // For the small date chip on the right card
         $nextDateForChip = $nextFuture
             ? $nextFuture->session_date
             : optional($sortedSessions->first())->session_date;
 
-        // Is there any upcoming session?
         $firstUpcoming = $event->sessions
             ->sortBy('session_date')
             ->first(fn($s) => \Carbon\Carbon::parse($s->session_date)->isFuture());
 
         $hasUpcoming = !is_null($firstUpcoming);
+
+        $manageUrl = auth()->check()
+            ? route('my.tickets')
+            : route('events.ticket.find', $event);
     @endphp
 
     @section('title', $ogTitle)
@@ -118,7 +118,7 @@
                 <div>
                     <h1 class="text-3xl md:text-4xl font-bold text-gray-900">{{ $event->name }}</h1>
 
-                    {{-- Countdown (to next upcoming session) --}}
+                    {{-- Countdown --}}
                     @if($countdownIso)
                         <div
                             x-data="countdown('{{ $countdownIso }}')"
@@ -126,23 +126,14 @@
                             class="mt-4"
                             aria-label="Countdown to event start"
                         >
-                            <div class="grid grid-cols-4 sm:grid-cols-4 gap-2 sm:gap-3 max-w-xl">
-                                <div class="flex flex-col items-center justify-center border border-gray-300 bg-white px-4 py-3 shadow-sm rounded-none">
-                                    <span class="text-[10px] sm:text-xs tracking-widest uppercase text-gray-500">Days</span>
-                                    <span class="mt-1 text-2xl sm:text-3xl font-bold tabular-nums leading-none" x-text="dd"></span>
-                                </div>
-                                <div class="flex flex-col items-center justify-center border border-gray-300 bg-white px-4 py-3 shadow-sm rounded-none">
-                                    <span class="text-[10px] sm:text-xs tracking-widest uppercase text-gray-500">Hours</span>
-                                    <span class="mt-1 text-2xl sm:text-3xl font-bold tabular-nums leading-none" x-text="hh"></span>
-                                </div>
-                                <div class="flex flex-col items-center justify-center border border-gray-300 bg-white px-4 py-3 shadow-sm rounded-none">
-                                    <span class="text-[10px] sm:text-xs tracking-widest uppercase text-gray-500">Minutes</span>
-                                    <span class="mt-1 text-2xl sm:text-3xl font-bold tabular-nums leading-none" x-text="mm"></span>
-                                </div>
-                                <div class="flex flex-col items-center justify-center border border-gray-300 bg-white px-4 py-3 shadow-sm rounded-none">
-                                    <span class="text-[10px] sm:text-xs tracking-widest uppercase text-gray-500">Seconds</span>
-                                    <span class="mt-1 text-2xl sm:text-3xl font-bold tabular-nums leading-none" x-text="ss"></span>
-                                </div>
+                            <div class="grid grid-cols-4 gap-2 max-w-xl">
+                                <template x-for="label in ['Days','Hours','Minutes','Seconds']" :key="label">
+                                    <div class="flex flex-col items-center justify-center border border-gray-300 bg-white px-4 py-3 shadow-sm">
+                                        <span class="text-[10px] sm:text-xs tracking-widest uppercase text-gray-500" x-text="label"></span>
+                                        <span class="mt-1 text-2xl sm:text-3xl font-bold tabular-nums leading-none"
+                                              x-text="label==='Days'?dd:label==='Hours'?hh:label==='Minutes'?mm:ss"></span>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     @endif
@@ -152,12 +143,6 @@
                             <span class="inline-flex items-center gap-1.5">
                                 <svg class="h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4 0-8 2-8 6v1h16v-1c0-4-4-6-8-6z"/></svg>
                                 Organized by <a href="{{ route('organizers.show', $event->organizer->slug) }}" class="text-indigo-600 hover:underline">{{ $event->organizer->name }}</a>
-                            </span>
-                        @endif
-                        @if ($event->location)
-                            <span class="inline-flex items-center gap-1.5">
-                                <svg class="h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.686 2 6 4.686 6 8c0 4.418 6 12 6 12s6-7.582 6-12c0-3.314-2.686-6-6-6zm0 8.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
-                                {{ $event->location }}
                             </span>
                         @endif
                     </div>
@@ -212,85 +197,85 @@
             </div>
 
             {{-- Right column --}}
-            <div class="lg:col-span-1">
-                <div class="lg:sticky lg:top-6 space-y-6">
-                    <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <div class="text-sm text-gray-600">Ticket</div>
-                                <div class="text-2xl font-bold text-gray-900">{{ $priceLabel }}</div>
-                            </div>
-                            @if ($image)
-                                <img src="{{ $image }}" alt="" class="h-12 w-12 rounded-lg object-cover">
+            <div class="lg:col-span-1 space-y-6">
+                {{-- Ticket card --}}
+                <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-sm text-gray-600">Ticket</div>
+                            <div class="text-2xl font-bold text-gray-900">{{ $priceLabel }}</div>
+                        </div>
+                        @if ($image)
+                            <img src="{{ $image }}" alt="" class="h-12 w-12 rounded-lg object-cover">
+                        @endif
+                    </div>
+
+                    <div class="mt-4 space-y-3 text-base">
+                        {{-- Date --}}
+                        <div class="flex items-center gap-2 text-gray-700">
+                            <svg class="h-5 w-5 text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v3H3V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1z"/><path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/></svg>
+                            @if ($nextDateForChip)
+                                <span>{{ \Carbon\Carbon::parse($nextDateForChip)->format('d M Y') }}</span>
+                            @else
+                                <span>Dates TBA</span>
                             @endif
                         </div>
 
-                        <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
-                            <div class="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                                <svg class="h-4 w-4 text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.686 2 6 4.686 6 8c0 4.418 6 12 6 12s6-7.582 6-12c0-3.314-2.686-6-6-6z"/><path d="M12 10.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
-                                <span class="truncate">{{ $event->location ?? 'Online' }}</span>
+                        {{-- Location --}}
+                        @if ($event->location)
+                            <div class="flex items-start gap-2 text-gray-700">
+                                <svg class="h-5 w-5 text-indigo-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"/></svg>
+                                <div>
+                                    <div>{{ $event->location }}</div>
+                                    <a href="https://www.google.com/maps/search/?api=1&query={{ urlencode($event->location) }}"
+                                       target="_blank"
+                                       rel="noopener"
+                                       class="text-indigo-600 font-medium hover:underline">
+                                        Get Directions
+                                    </a>
+                                </div>
                             </div>
-                            <div class="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                                <svg class="h-4 w-4 text-gray-500" viewBox="0 0 24 24" fill="currentColor"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v3H3V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1z"/><path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/></svg>
-                                @if ($nextDateForChip)
-                                    <span>{{ \Carbon\Carbon::parse($nextDateForChip)->format('d M Y') }}</span>
-                                @else
-                                    <span>Dates TBA</span>
-                                @endif
-                            </div>
-                        </div>
-
-                        {{-- Register / Manage buttons --}}
-                        @if ($hasUpcoming)
-                            <a href="{{ route('events.register', $event) }}"
-                               class="mt-4 inline-flex items-center justify-center w-full rounded-lg bg-indigo-600 text-white px-4 py-2.5 hover:bg-indigo-700">
-                                Register
-                            </a>
-                        @else
-                            <span class="mt-4 w-full inline-flex justify-center items-center px-4 py-2.5 rounded-xl bg-gray-100 text-gray-400 font-medium cursor-not-allowed select-none">
-                                Registration closed
-                            </span>
                         @endif
+                    </div>
 
-                        @php
-                            $manageUrl = auth()->check()
-                                ? route('my.tickets')
-                                : route('events.ticket.find', $event);
-                        @endphp
+                    {{-- Register --}}
+                    @if ($hasUpcoming)
+                        <a href="{{ route('events.register', $event) }}"
+                           class="mt-5 inline-flex items-center justify-center w-full rounded-lg bg-indigo-600 text-white px-4 py-3 font-semibold text-lg hover:bg-indigo-700">
+                            Register
+                        </a>
+                    @else
+                        <span class="mt-5 w-full inline-flex justify-center items-center px-4 py-3 rounded-xl bg-gray-100 text-gray-500 font-medium text-lg cursor-not-allowed">
+                            Registration closed
+                        </span>
+                    @endif
 
+                    {{-- Secondary actions --}}
+                    <div class="mt-4 space-y-2 text-center text-base font-medium">
                         @auth
-                            <a href="{{ route('my.tickets') }}"
-                               class="mt-2 w-full inline-flex justify-center items-center px-4 py-2.5 rounded-xl bg-green-600 text-white font-medium hover:bg-green-700 transition">
+                            <a href="{{ route('my.tickets') }}" class="block text-green-600 hover:underline">
                                 Manage my tickets
                             </a>
                         @else
-                            <a href="{{ $manageUrl }}"
-                               class="mt-3 w-full inline-flex justify-center items-center px-4 py-2.5 rounded-xl bg-green-600 text-white font-medium hover:bg-green-700 transition">
+                            <a href="{{ $manageUrl }}" class="block text-green-600 hover:underline">
                                 Already registered? Manage your booking
                             </a>
                         @endauth
 
                         @if ($event->avatar_url)
-                            <a href="{{ route('events.avatar', $event) }}"
-                               class="mt-2 w-full inline-flex justify-center items-center px-4 py-2.5 rounded-xl bg-amber-500 text-white font-medium hover:bg-amber-600 transition">
+                            <a href="{{ route('events.avatar', $event) }}" class="block text-amber-600 hover:underline">
                                 Create Personal Display Picture
                             </a>
                         @endif
 
-                        <div class="mt-4 flex items-center gap-3">
-                            <span class="text-xs text-gray-500">Share:</span>
-                            <a class="text-gray-500 hover:text-gray-700" target="_blank"
-                               href="https://twitter.com/intent/tweet?url={{ urlencode(request()->fullUrl()) }}&text={{ urlencode($event->name) }}">X</a>
-                            <a class="text-gray-500 hover:text-gray-700" target="_blank"
-                               href="https://www.facebook.com/sharer/sharer.php?u={{ urlencode(request()->fullUrl()) }}">Facebook</a>
-                            <a class="text-gray-500 hover:text-gray-700" target="_blank"
-                               href="https://www.linkedin.com/sharing/share-offsite/?url={{ urlencode(request()->fullUrl()) }}">LinkedIn</a>
-                        </div>
+                        <button onclick="shareEvent()" class="block w-full text-blue-600 hover:underline">
+                            Share Event
+                        </button>
                     </div>
-
-                    {{-- Organizer card --}}
-                    <x-organizer-card :organizer="$event->organizer" />
                 </div>
+
+                {{-- Organizer card --}}
+                <x-organizer-card :organizer="$event->organizer" />
             </div>
         </div>
     </div>
@@ -316,5 +301,23 @@
                 }
             }))
         })
+    </script>
+
+    <script>
+        function shareEvent() {
+            const shareData = {
+                title: @json($event->name),
+                text: "Check out this event on {{ config('app.name') }}!",
+                url: "{{ request()->fullUrl() }}"
+            };
+
+            if (navigator.share) {
+                navigator.share(shareData).catch(err => console.log("Share cancelled", err));
+            } else {
+                navigator.clipboard.writeText(shareData.url).then(() => {
+                    alert("Event link copied to clipboard!");
+                });
+            }
+        }
     </script>
 </x-app-layout>

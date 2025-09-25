@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\EventCreatedMail;
 use Illuminate\Validation\Rule;
+use App\Mail\OrganizerNewEventMail;
+
 
 class EventController extends Controller
 {
@@ -39,11 +41,13 @@ class EventController extends Controller
             $like = '%' . $q . '%';
             $base->where(function ($s) use ($like) {
                 $s->where('name', 'like', $like)
-                  ->orWhere('organizer', 'like', $like)
-                  ->orWhere('description', 'like', $like)
-                  ->orWhere('tags', 'like', $like);
+                ->orWhere('description', 'like', $like)
+                ->orWhere('tags', 'like', $like)
+                ->orWhere('location', 'like', $like)
+                ->orWhereHas('organizer', fn($oq) => $oq->where('name', 'like', $like));
             });
         }
+
 
         if ($loc !== '') {
             $base->where('location', 'like', '%' . $loc . '%');
@@ -231,6 +235,17 @@ class EventController extends Controller
         }
 
         Mail::to(auth()->user()->email)->send(new EventCreatedMail($event));
+
+        // notify followers
+        $organizer = $event->organizer; // relation
+        if ($organizer) {
+            $followers = $organizer->followers; // assuming you have many-to-many
+            foreach ($followers as $follower) {
+                if ($follower->email) {
+                    Mail::to($follower->email)->queue(new OrganizerNewEventMail($organizer, $event));
+                }
+            }
+        }
 
         return redirect()->route('dashboard')->with('success', 'Event created successfully!');
     }

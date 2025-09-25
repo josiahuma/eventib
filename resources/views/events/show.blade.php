@@ -251,27 +251,47 @@
                     @endif
 
                     {{-- Secondary actions --}}
-                    <div class="mt-4 space-y-2 text-center text-base font-medium">
+                    <div class="mt-6 border-t border-gray-200 pt-4 space-y-3">
                         @auth
-                            <a href="{{ route('my.tickets') }}" class="block text-green-600 hover:underline">
+                            <a href="{{ route('my.tickets') }}" 
+                            class="flex items-center gap-2 text-gray-700 hover:text-green-600 font-medium">
+                                <svg class="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M5 4h14a2 2 0 012 2v2a2 2 0 01-2 2h-1l-2 3-2-3H5a2 2 0 01-2-2V6a2 2 0 012-2z"/>
+                                    <path d="M5 12h14v8H5z"/>
+                                </svg>
                                 Manage my tickets
                             </a>
                         @else
-                            <a href="{{ $manageUrl }}" class="block text-green-600 hover:underline">
+                            <a href="{{ $manageUrl }}" 
+                            class="flex items-center gap-2 text-gray-700 hover:text-green-600 font-medium">
+                                <svg class="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M5 4h14a2 2 0 012 2v2a2 2 0 01-2 2h-1l-2 3-2-3H5a2 2 0 01-2-2V6a2 2 0 012-2z"/>
+                                    <path d="M5 12h14v8H5z"/>
+                                </svg>
                                 Already registered? Manage your booking
                             </a>
                         @endauth
 
                         @if ($event->avatar_url)
-                            <a href="{{ route('events.avatar', $event) }}" class="block text-amber-600 hover:underline">
+                            <a href="{{ route('events.avatar', $event) }}" 
+                            class="flex items-center gap-2 text-gray-700 hover:text-amber-600 font-medium">
+                                <svg class="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 5a7 7 0 100 14 7 7 0 000-14zm0 2a5 5 0 110 10A5 5 0 0112 7z"/>
+                                    <path d="M4 20h16v2H4z"/>
+                                </svg>
                                 Create Personal Display Picture
                             </a>
                         @endif
 
-                        <button onclick="shareEvent()" class="block w-full text-blue-600 hover:underline">
+                        <button onclick="shareEvent()" 
+                                class="flex items-center gap-2 text-gray-700 hover:text-blue-600 font-medium w-full text-left">
+                            <svg class="h-5 w-5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M4 12v-2a8 8 0 1116 0v2l2 2v6H2v-6l2-2zm2 2h12v4H6v-4z"/>
+                            </svg>
                             Share Event
                         </button>
                     </div>
+
                 </div>
 
                 {{-- Organizer card --}}

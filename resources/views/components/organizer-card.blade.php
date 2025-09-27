@@ -13,6 +13,7 @@
         ['bg-teal-100', 'text-teal-700'],
     ];
     $colorSet = $bgColors[$organizer->id % count($bgColors)];
+    $isUnknown = strtolower(trim($organizer->name)) === 'unknown';
 @endphp
 
 <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
@@ -21,10 +22,17 @@
 
         <div>
             <div class="text-sm text-gray-500">Organizer</div>
-            <a href="{{ route('organizers.show', $organizer->slug) }}"
-               class="text-base font-medium text-indigo-600 hover:underline">
-                {{ $organizer->name }}
-            </a>
+
+            @if ($isUnknown)
+                <span class="text-base font-medium text-gray-700">
+                    {{ $organizer->name }}
+                </span>
+            @else
+                <a href="{{ route('organizers.show', $organizer->slug) }}"
+                   class="text-base font-medium text-indigo-600 hover:underline">
+                    {{ $organizer->name }}
+                </a>
+            @endif
         </div>
     </div>
 </div>

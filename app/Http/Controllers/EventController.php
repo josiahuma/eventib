@@ -409,9 +409,21 @@ class EventController extends Controller
     public function edit(Event $event)
     {
         abort_if($event->user_id !== Auth::id(), 403);
+
         $payouts = auth()->user()->payoutMethods()->get()->groupBy('country');
-        return view('events.edit', compact('event') + ['payoutsByCountry' => $payouts->toArray()]);
+
+        // fetch organizers for this user
+        $organizers = \App\Models\Organizer::where('user_id', Auth::id())
+            ->orderBy('name')
+            ->get();
+
+        return view('events.edit', [
+            'event'           => $event,
+            'payoutsByCountry'=> $payouts->toArray(),
+            'organizers'      => $organizers,
+        ]);
     }
+
 
     public function destroy(Event $event)
     {

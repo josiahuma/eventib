@@ -323,15 +323,23 @@
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Event name</label>
                             <input type="text" name="name" required
-                                   value="{{ old('name', $event->name) }}"
-                                   class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
+                                value="{{ old('name', $event->name) }}"
+                                class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
                         </div>
 
+                        {{-- Organizer (dropdown) --}}
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Organizer</label>
-                            <input type="text" name="organizer" placeholder="Organization or person"
-                                   value="{{ old('organizer', $event->organizer) }}"
-                                   class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
+                            <select name="organizer_id" required
+                                    class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
+                                <option value="">— Select organizer —</option>
+                                @foreach($organizers as $organizer)
+                                    <option value="{{ $organizer->id }}"
+                                        @selected(old('organizer_id', $event->organizer_id) == $organizer->id)>
+                                        {{ $organizer->name }}
+                                    </option>
+                                @endforeach
+                            </select>
                         </div>
 
                         <div>
@@ -339,7 +347,9 @@
                             <select name="category" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
                                 <option value="">— Select —</option>
                                 @foreach ($cats as $cat)
-                                    <option value="{{ $cat }}" @selected(old('category', $event->category) === $cat)>{{ $cat }}</option>
+                                    <option value="{{ $cat }}" @selected(old('category', $event->category) === $cat)>
+                                        {{ $cat }}
+                                    </option>
                                 @endforeach
                             </select>
                         </div>
@@ -357,9 +367,9 @@
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
                             <input id="location-input" type="text" name="location"
-                                   value="{{ old('location', $event->location) }}"
-                                   class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
-                                   placeholder="Venue, address or place name" autocomplete="off">
+                                value="{{ old('location', $event->location) }}"
+                                class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
+                                placeholder="Venue, address or place name" autocomplete="off">
                             <input type="hidden" name="location_place_id" id="location_place_id" value="{{ old('location_place_id', $event->location_place_id ?? '') }}">
                             <input type="hidden" name="location_lat" id="location_lat" value="{{ old('location_lat', $event->location_lat ?? '') }}">
                             <input type="hidden" name="location_lng" id="location_lng" value="{{ old('location_lng', $event->location_lng ?? '') }}">
@@ -369,7 +379,7 @@
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
                             <textarea name="description" rows="4"
-                                      class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">{{ old('description', $event->description) }}</textarea>
+                                    class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">{{ old('description', $event->description) }}</textarea>
                         </div>
                     </div>
                 </div>
@@ -383,6 +393,7 @@
                     </button>
                 </div>
             </section>
+
 
             {{-- STEP 3 — Schedule & Media --}}
             <section x-show="step === 3" x-cloak class="space-y-6">

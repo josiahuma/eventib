@@ -177,9 +177,17 @@
                 @if ($event->description)
                     <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
                         <h2 class="text-lg font-semibold text-gray-900">About this event</h2>
+                        @php
+                            function linkify($text) {
+                                $pattern = '/(https?:\/\/[^\s<]+)/i';
+                                return preg_replace($pattern, '<a href="$1" class="text-indigo-600 underline" target="_blank" rel="noopener">$1</a>', e($text));
+                            }
+                        @endphp
+
                         <div class="prose max-w-none mt-2 text-gray-700">
-                            {!! nl2br(e($event->description)) !!}
+                            {!! nl2br(linkify($event->description)) !!}
                         </div>
+
                     </div>
                 @endif
 
@@ -214,7 +222,7 @@
                     @if ($hasUpcoming)
                         <a href="{{ route('events.register', $event) }}"
                         class="mt-5 inline-flex items-center justify-center w-full rounded-lg bg-indigo-600 text-white px-4 py-3 font-semibold text-lg hover:bg-indigo-700">
-                            Register
+                            {{ $isFree ? 'Attend' : 'Register' }}
                         </a>
                     @else
                         <span class="mt-5 w-full inline-flex justify-center items-center px-4 py-3 rounded-xl bg-gray-100 text-gray-500 font-medium text-lg cursor-not-allowed">

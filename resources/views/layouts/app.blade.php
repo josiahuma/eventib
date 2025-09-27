@@ -31,6 +31,9 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.css" rel="stylesheet">
 
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9796795832966785"
+     crossorigin="anonymous"></script>
+
     <style>[x-cloak]{display:none!important}</style>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])

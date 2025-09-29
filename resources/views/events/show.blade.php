@@ -313,6 +313,9 @@
 
                 {{-- Organizer card --}}
                 <x-organizer-card :organizer="$event->organizer" />
+
+                {{-- Google Ads --}}
+                <x-google-ads />
             </div>
         </div>
     </div>

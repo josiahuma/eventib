@@ -74,5 +74,9 @@
 </script>
 
 <x-cookie-consent />
+<script>
+    (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+
 </body>
 </html>

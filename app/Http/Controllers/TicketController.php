@@ -15,6 +15,7 @@ use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
 
+
 class TicketController extends Controller
 {
     /** Tickets home (legacy). Prefer /my-tickets, but we keep this for old links. */
@@ -60,7 +61,13 @@ class TicketController extends Controller
         abort_unless($registration->event_id === $event->id, 404);
         $this->authorizeRegistration($registration);
 
-        $payload = $registration->freePassPayload();
+        // Ensure qr_token exists
+        if (empty($registration->qr_token)) {
+            $registration->qr_token = \Illuminate\Support\Str::random(40);
+            $registration->save();
+        }
+
+        $payload = "FR|v1|{$event->public_id}|{$registration->id}|{$registration->qr_token}";
         $party   = 1
             + (int)($registration->party_adults ?? 0)
             + (int)($registration->party_children ?? 0);

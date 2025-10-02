@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Support\Str;
 use App\Mail\NewRegistrationNotificationMail;
 use App\Mail\RegistrationConfirmedMail;
 use App\Models\Event;
@@ -11,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Stripe\StripeClient;
+
 
 class RegistrationController extends Controller
 {
@@ -200,6 +202,12 @@ class RegistrationController extends Controller
                 if ($event->user?->email) {
                     Mail::to($event->user->email)->send(new NewRegistrationNotificationMail($event, $registration));
                 }
+
+                if ($registration->status === 'free' && empty($registration->qr_token)) {
+                    $registration->qr_token = \Illuminate\Support\Str::random(40);
+                    $registration->save();
+                }
+
                 Mail::to($registration->email)->send(new RegistrationConfirmedMail($event, $registration));
                 return redirect()->to(route('events.register.result', ['event' => $event, 'registered' => 1]));
             }
@@ -339,6 +347,12 @@ class RegistrationController extends Controller
             if ($event->user?->email) {
                 Mail::to($event->user->email)->send(new NewRegistrationNotificationMail($event, $registration));
             }
+
+            if ($registration->status === 'free' && empty($registration->qr_token)) {
+                $registration->qr_token = \Illuminate\Support\Str::random(40);
+                $registration->save();
+            }
+
             Mail::to($registration->email)->send(new RegistrationConfirmedMail($event, $registration));
             return redirect()->to(route('events.register.result', ['event' => $event, 'registered' => 1]));
         }

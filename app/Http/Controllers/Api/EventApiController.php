@@ -36,7 +36,7 @@ class EventApiController extends Controller
             ->orderBy('session_date')
             ->get(['id','session_name as name','session_date']);
 
-        return response()->json($sessions);
+        return response()->json($event->sessions()->get());
     }
 }
 

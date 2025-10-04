@@ -16,8 +16,8 @@ class EventApiController extends Controller
             ->when(!($u->is_admin ?? false), fn($q) => $q->where('user_id', $u->id))
             ->orderByDesc('id')
             ->get([
-                'id',        // numeric ID for app
-                'public_id', // expose ULID if we ever want to migrate
+                'id',        // numeric ID for internal use
+                'public_id', // ULID exposed to API clients
                 'name',
                 'location',
             ]);
@@ -25,18 +25,28 @@ class EventApiController extends Controller
         return response()->json($events);
     }
 
-    public function sessions(Request $request, $eventId)
+    public function show(Request $request, Event $event)
     {
         $u = $request->user();
-        $event = Event::findOrFail($eventId);
+        abort_unless(($event->user_id === $u->id) || ($u->is_admin ?? false), 403);
 
+        return response()->json([
+            'id'        => $event->id,
+            'public_id' => $event->public_id,
+            'name'      => $event->name,
+            'location'  => $event->location,
+        ]);
+    }
+
+    public function sessions(Request $request, Event $event)
+    {
+        $u = $request->user();
         abort_unless(($event->user_id === $u->id) || ($u->is_admin ?? false), 403);
 
         $sessions = $event->sessions()
             ->orderBy('session_date')
-            ->get(['id','session_name as name','session_date']);
+            ->get(['id', 'session_name as name', 'session_date']);
 
-        return response()->json($event->sessions()->get());
+        return response()->json($sessions);
     }
 }
-

@@ -147,6 +147,30 @@ class MobileCheckInController extends Controller
         ]);
     }
 
+    public function checkedIn(Request $request, $eventId)
+    {
+        $u = $request->user();
+        $event = Event::findOrFail($eventId);
+
+        abort_unless(($event->user_id === $u->id) || ($u->is_admin ?? false), 403);
+
+        $registrations = \App\Models\EventRegistration::where('event_id', $event->id)
+            ->whereNotNull('checked_in_at')
+            ->orderByDesc('checked_in_at')
+            ->get([
+                'id',
+                'name',
+                'email',
+                'mobile',
+                'checked_in_at',
+            ]);
+
+        return response()->json($registrations);
+    }
+
+
+
+
     /**
      * Heuristics to resolve tickets from QR payloads:
      * - Matches full URLs like .../tickets/{ticketId}

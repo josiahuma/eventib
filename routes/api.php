@@ -5,19 +5,18 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\EventApiController;
 use App\Http\Controllers\Api\MobileCheckInController;
 
-// --- Authentication for the mobile app ---
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:20,1');
 
-// Everything below requires a valid token
 Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
-    Route::get('/me',     [AuthController::class, 'me']);
+    Route::get('/me', [AuthController::class, 'me']);
 
-    // Organizer's events + sessions (for picker in app)
-    Route::get('/events',                    [EventApiController::class, 'index'])->middleware('throttle:60,1');
-    Route::get('/events/{event}/sessions',   [EventApiController::class, 'sessions'])->middleware('throttle:60,1');
+    // Events + sessions (using numeric ID not public_id)
+    Route::get('/events', [EventApiController::class, 'index'])->middleware('throttle:60,1');
+    Route::get('/events/{eventId}/sessions', [EventApiController::class, 'sessions'])->middleware('throttle:60,1');
 
-    // Mobile ticket/registration check-in
+    // Mobile check-in flows
     Route::post('/check-in', [MobileCheckInController::class, 'checkIn'])->middleware('throttle:120,1');
+    Route::get('/events/{eventId}/checked-in', [MobileCheckInController::class, 'checkedIn'])->middleware('throttle:60,1');
 });

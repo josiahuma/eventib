@@ -28,6 +28,20 @@ class PageController extends Controller
         return view('static.contact');
     }
 
+    public function terms()
+    {
+        return view('static.terms');
+    }
+    public function privacy()
+    {
+        return view('static.privacy');
+    }
+
+    public function cookies()
+    {
+        return view('static.cookies');
+    }
+
     public function contactSubmit(Request $request)
     {
         // simple honeypot

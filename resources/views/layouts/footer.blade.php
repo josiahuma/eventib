@@ -101,9 +101,9 @@
         <div class="mt-8 pt-6 border-t border-white/10 text-sm flex flex-col sm:flex-row items-center justify-between gap-3">
             <p class="text-white/80">© {{ date('Y') }} Eventib. All rights reserved.</p>
             <div class="flex items-center gap-4">
-                <a href="#" class="text-white/80 hover:text-white">Terms</a>
-                <a href="#" class="text-white/80 hover:text-white">Privacy</a>
-                <a href="#" class="text-white/80 hover:text-white">Cookies</a>
+                <a href="{{ route('terms') }}" class="text-white/80 hover:text-white">Terms</a>
+                <a href="{{ route('privacy') }}" class="text-white/80 hover:text-white">Privacy</a>
+                <a href="{{ route('cookies') }}" class="text-white/80 hover:text-white">Cookies</a>
             </div>
         </div>
     </div>

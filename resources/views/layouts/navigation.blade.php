@@ -1,5 +1,6 @@
 {{-- resources/views/layouts/navigation.blade.php --}}
-<nav x-data="{ open: false }" class="bg-white border-b border-gray-100">
+<nav x-data="{ open: false }"
+     class="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-16">
             <div class="flex">
@@ -12,6 +13,7 @@
 
                 <!-- Left links (visible to all) -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                    <x-nav-link :href="route('homepage')" :active="request()->routeIs('homepage')">Find Events</x-nav-link>
                     <x-nav-link :href="route('how')" :active="request()->routeIs('how')">How it works</x-nav-link>
                     <x-nav-link :href="route('pricing')" :active="request()->routeIs('pricing')">Pricing</x-nav-link>
                     <x-nav-link :href="route('about')" :active="request()->routeIs('about')">About</x-nav-link>
@@ -123,6 +125,7 @@
 
             <div class="px-4 py-3">
                 <div class="space-y-1">
+                    <x-responsive-nav-link :href="route('homepage')" :active="request()->routeIs('homepage')">Find Events</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('how')" :active="request()->routeIs('how')">How it works</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('pricing')" :active="request()->routeIs('pricing')">Pricing</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('about')" :active="request()->routeIs('about')">About</x-responsive-nav-link>

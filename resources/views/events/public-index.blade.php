@@ -7,7 +7,6 @@
                 Discover Events
             </h2>
 
-            {{-- Location-only search (keeps using ?q=... so no controller changes) --}}
             <form action="{{ route('homepage') }}" method="GET" class="w-full sm:w-[440px]">
                 <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-200 flex items-stretch overflow-hidden">
                     <div class="px-3 flex items-center text-gray-400">

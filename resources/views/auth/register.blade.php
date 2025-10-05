@@ -121,11 +121,20 @@
                     {{-- Terms (optional; remove if not needed) --}}
                     {{-- <p class="text-xs text-gray-500">By creating an account, you agree to our <a href="#" class="underline">Terms</a> and <a href="#" class="underline">Privacy Policy</a>.</p> --}}
 
+                    {{-- Turnstile --}}
+                    <div class="cf-turnstile" data-sitekey="{{ config('services.turnstile.sitekey') }}"></div>
+                    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+
+
                     {{-- Submit --}}
                     <x-primary-button class="w-full justify-center">
                         {{ __('Register') }}
                     </x-primary-button>
                 </form>
+                @error('captcha')
+                    <p class="text-red-600 text-sm mt-2">{{ $message }}</p>
+                @enderror
+
 
                 {{-- Footer --}}
                 <p class="mt-6 text-center text-sm text-gray-600">

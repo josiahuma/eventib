@@ -257,7 +257,7 @@
         @if ($featured->count())
             <section class="mb-10">
                 <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-3xl font-bold text-gray-900">Featured Events</h3>
+                    <h3 class="text-2xl font-bold text-gray-900">Featured Events</h3>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -276,7 +276,7 @@
         @if ($upcoming->count())
             <section class="mb-10">
                 <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-3xl font-bold text-gray-900">Upcoming Events</h3>
+                    <h3 class="text-2xl font-bold text-gray-900">Upcoming Events</h3>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -301,7 +301,7 @@
 
             <section class="mb-12">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-3xl font-bold text-gray-900">Past Events</h3>
+                    <h3 class="text-2xl font-bold text-gray-900">Past Events</h3>
                     <a href="{{ route('events.past') }}" class="text-indigo-600 hover:text-indigo-800 font-medium text-sm">See all</a>
                 </div>
 

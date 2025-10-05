@@ -42,9 +42,16 @@
 <div class="min-h-screen bg-gray-100">
     @include('layouts.navigation')
 
+    @php
+    $isHome = request()->routeIs('homepage');
+    $headerWrapperClasses = $isHome
+            ? 'sticky top-16 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm'
+            : 'bg-white shadow';
+    @endphp
+
     @isset($header)
-        <header class="sticky top-[64px] z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+        <header class="{{ $headerWrapperClasses }}">
+            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
                 {{ $header }}
             </div>
         </header>

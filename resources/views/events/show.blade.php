@@ -204,8 +204,10 @@
                 @endif
             </div>
 
-            {{-- Right column --}}
+            {{-- Right column (sticky floating ticket card) --}}
             <div class="lg:col-span-1 space-y-6">
+                <div class="lg:sticky lg:top-6 z-20">
+
                 {{-- Ticket card --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
                     <div class="flex items-center justify-between">
@@ -316,6 +318,7 @@
 
                 {{-- Google Ads --}}
                 <x-google-ads />
+                </div>
             </div>
         </div>
     </div>
@@ -360,4 +363,60 @@
             }
         }
     </script>
+
+    {{-- Floating Attend/Register Bar (Always visible, respects closed registrations) --}}
+    <div 
+        x-data="{ hideNearFooter: false }"
+        x-init="
+            const footer = document.querySelector('footer');
+            if (footer) {
+                const observer = new IntersectionObserver((entries) => {
+                    hideNearFooter = entries[0].isIntersecting;
+                }, { threshold: 0.1 });
+                observer.observe(footer);
+            }
+        "
+        :style="hideNearFooter ? 'transform: translateY(120%); opacity: 0;' : 'transform: translateY(0); opacity: 1;'"
+        class="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md shadow-lg border-t border-gray-200 transition-all duration-500 ease-in-out"
+    >
+        <div class="max-w-5xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-4">
+
+            {{-- Event Info --}}
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-gray-800">
+                <span class="text-lg sm:text-xl font-bold text-blue-700 truncate">{{ $event->name }}</span>
+
+                @if($nextDateForChip)
+                    <span class="text-sm sm:text-base font-medium text-gray-600">
+                        {{ \Carbon\Carbon::parse($nextDateForChip)->format('D, M j · g:ia') }}
+                    </span>
+                @endif
+            </div>
+
+            {{-- Price + Button --}}
+            <div class="flex items-center gap-4 shrink-0">
+                @if ($isFree)
+                    <span class="px-4 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-base font-semibold">
+                        Free
+                    </span>
+                @else
+                    <span class="px-4 py-1.5 bg-gray-100 text-gray-800 rounded-full text-base font-semibold">
+                        {{ $priceLabel }}
+                    </span>
+                @endif
+
+                {{-- Show Attend/Register only if event has upcoming session --}}
+                @if ($hasUpcoming)
+                    <a href="{{ route('events.register', $event) }}"
+                    class="inline-flex items-center justify-center gap-2 rounded-full bg-indigo-600 text-white font-bold px-6 py-3 text-base sm:text-lg hover:bg-indigo-700 shadow-md transition transform hover:scale-[1.03] active:scale-[0.98]">
+                        {{ $isFree ? 'Attend' : 'Register' }}
+                    </a>
+                @else
+                    <span class="inline-flex items-center justify-center gap-2 rounded-full bg-gray-200 text-gray-500 font-bold px-6 py-3 text-base sm:text-lg cursor-not-allowed">
+                        Registration closed
+                    </span>
+                @endif
+            </div>
+        </div>
+    </div>
+
 </x-app-layout>

@@ -398,6 +398,25 @@ class EventController extends Controller
         ]);
     }
 
+    public function past()
+    {
+        // Get events whose latest session date is in the past
+        $past = \App\Models\Event::whereHas('sessions', function ($query) {
+                $query->where('session_date', '<', now());
+            })
+            ->with(['sessions' => function ($query) {
+                $query->orderBy('session_date', 'desc');
+            }])
+            ->orderByDesc(
+                \DB::raw('(SELECT MAX(session_date) FROM event_sessions WHERE event_sessions.event_id = events.id)')
+            )
+            ->paginate(12);
+
+        return view('events.past', compact('past'));
+    }
+
+
+
     public function avatar(Event $event)
     {
         if (!$event->avatar_url) {

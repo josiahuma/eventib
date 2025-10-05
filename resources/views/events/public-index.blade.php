@@ -291,24 +291,59 @@
             </section>
         @endif
 
-        {{-- ===== Past ===== --}}
-        @if ($past->count())
-            <section>
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-3xl font-bold text-gray-900">Past Events</h3>
-                </div>
+        {{-- ===== Past Events (no visible scrollbar, swipable, arrows like Meetup) ===== --}}
+@if ($past->count())
+<section class="mb-12">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-3xl font-bold text-gray-900">Past Events</h3>
+        <a href="{{ route('events.past') }}" class="text-indigo-600 hover:text-indigo-800 font-medium text-sm">See all</a>
+    </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    @foreach ($past as $event)
-                        @include('events.partials._event_card', ['event' => $event])
-                    @endforeach
-                </div>
+    <div 
+        x-data="{ 
+            scrollLeft() { this.$refs.scroller.scrollBy({ left: -300, behavior: 'smooth' }) }, 
+            scrollRight() { this.$refs.scroller.scrollBy({ left: 300, behavior: 'smooth' }) } 
+        }"
+        class="relative group"
+    >
+        {{-- Left arrow (hidden on mobile) --}}
+        <button 
+            @click="scrollLeft()" 
+            class="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-md rounded-full p-3 opacity-0 group-hover:opacity-100 transition"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-700" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.293 16.293a1 1 0 010-1.414L15.586 12H4a1 1 0 110-2h11.586l-3.293-2.879a1 1 0 111.414-1.414l5 4.5a1 1 0 010 1.414l-5 4.5a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+            </svg>
+        </button>
 
-                <div class="mt-6">
-                    {{ $past->withQueryString()->links('pagination::tailwind', ['paginator' => $past]) }}
+        {{-- Scrollable track --}}
+        <div 
+            id="pastEventsScroller"
+            x-ref="scroller"
+            class="flex space-x-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2"
+        >
+            @foreach ($past as $event)
+                <div class="snap-start shrink-0 w-[260px] sm:w-[300px] md:w-[320px]">
+                    @include('events.partials._event_card', ['event' => $event])
                 </div>
-            </section>
-        @endif
+            @endforeach
+        </div>
+
+        {{-- Right arrow (hidden on mobile) --}}
+        <button 
+            @click="scrollRight()" 
+            class="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-md rounded-full p-3 opacity-0 group-hover:opacity-100 transition"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-700" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M7.707 3.707a1 1 0 010 1.414L4.414 8H16a1 1 0 110 2H4.414l3.293 2.879a1 1 0 11-1.414 1.414l-5-4.5a1 1 0 010-1.414l5-4.5a1 1 0 011.414 0z" clip-rule="evenodd"/>
+            </svg>
+        </button>
+    </div>
+</section>
+@endif
+
+
+
 
         @if (!$featured->count() && !$upcoming->count() && !$past->count())
             <div class="bg-white rounded-2xl border border-dashed border-gray-300 p-12 text-center">
@@ -337,4 +372,16 @@
         </script>
         <script src="https://maps.googleapis.com/maps/api/js?key={{ urlencode(config('services.google.maps_key')) }}&libraries=places&callback=initHomePlaces" async defer></script>
     @endif
+
+    <style>
+    /* Hide scrollbar globally for past events carousel (works on all browsers) */
+    #pastEventsScroller {
+        -ms-overflow-style: none;  /* IE/Edge */
+        scrollbar-width: none;     /* Firefox */
+    }
+    #pastEventsScroller::-webkit-scrollbar {
+        display: none;             /* Chrome, Safari */
+    }
+</style>
+
 </x-app-layout>

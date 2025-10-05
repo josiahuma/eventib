@@ -57,6 +57,7 @@ Route::get('/privacy', [PageController::class, 'privacy'])->name('privacy');
 Route::get('/cookies', [PageController::class, 'cookies'])->name('cookies');
 Route::get('/organizers/{organizer}', [OrganizerController::class, 'show'])->name('organizers.show');
 Route::post('/organizers/{organizer}/contact', [OrganizerController::class, 'contact'])->name('organizers.contact');
+Route::get('/events/past', [EventController::class, 'past'])->name('events.past');
 
 
 

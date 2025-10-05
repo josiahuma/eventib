@@ -291,58 +291,76 @@
             </section>
         @endif
 
-        {{-- ===== Past Events (no visible scrollbar, swipable, arrows like Meetup) ===== --}}
-@if ($past->count())
-<section class="mb-12">
-    <div class="flex items-center justify-between mb-4">
-        <h3 class="text-3xl font-bold text-gray-900">Past Events</h3>
-        <a href="{{ route('events.past') }}" class="text-indigo-600 hover:text-indigo-800 font-medium text-sm">See all</a>
-    </div>
+        {{-- ===== Past Events (horizontal scroll) ===== --}}
+        @if ($past->count())
+            {{-- Hide scrollbar (fallback if scrollbar-hide utility isn't present) --}}
+            <style>
+                #pastRowScroller { scrollbar-width: none; -ms-overflow-style: none; }
+                #pastRowScroller::-webkit-scrollbar { display: none; }
+            </style>
 
-    <div 
-        x-data="{ 
-            scrollLeft() { this.$refs.scroller.scrollBy({ left: -300, behavior: 'smooth' }) }, 
-            scrollRight() { this.$refs.scroller.scrollBy({ left: 300, behavior: 'smooth' }) } 
-        }"
-        class="relative group"
-    >
-        {{-- Left arrow (hidden on mobile) --}}
-        <button 
-            @click="scrollLeft()" 
-            class="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-md rounded-full p-3 opacity-0 group-hover:opacity-100 transition"
-        >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-700" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M12.293 16.293a1 1 0 010-1.414L15.586 12H4a1 1 0 110-2h11.586l-3.293-2.879a1 1 0 111.414-1.414l5 4.5a1 1 0 010 1.414l-5 4.5a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
-            </svg>
-        </button>
-
-        {{-- Scrollable track --}}
-        <div 
-            id="pastEventsScroller"
-            x-ref="scroller"
-            class="flex space-x-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2"
-        >
-            @foreach ($past as $event)
-                <div class="snap-start shrink-0 w-[260px] sm:w-[300px] md:w-[320px]">
-                    @include('events.partials._event_card', ['event' => $event])
+            <section class="mb-12">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-3xl font-bold text-gray-900">Past Events</h3>
+                    <a href="{{ route('events.past') }}" class="text-indigo-600 hover:text-indigo-800 font-medium text-sm">See all</a>
                 </div>
-            @endforeach
-        </div>
 
-        {{-- Right arrow (hidden on mobile) --}}
-        <button 
-            @click="scrollRight()" 
-            class="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white shadow-md rounded-full p-3 opacity-0 group-hover:opacity-100 transition"
-        >
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-700" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M7.707 3.707a1 1 0 010 1.414L4.414 8H16a1 1 0 110 2H4.414l3.293 2.879a1 1 0 11-1.414 1.414l-5-4.5a1 1 0 010-1.414l5-4.5a1 1 0 011.414 0z" clip-rule="evenodd"/>
-            </svg>
-        </button>
-    </div>
-</section>
-@endif
+                <div
+                    class="relative"
+                    x-data="{
+                        step: 320,
+                        atEnd: false,
+                        update() {
+                            const el = this.$refs.scroller;
+                            this.atEnd = (el.scrollLeft + el.clientWidth) >= (el.scrollWidth - 1);
+                        },
+                        right() {
+                            const el = this.$refs.scroller;
+                            el.scrollBy({ left: this.step, behavior: 'smooth' });
+                            // recheck after the smooth scroll finishes
+                            setTimeout(() => this.update(), 300);
+                        },
+                        init() {
+                            this.$nextTick(() => this.update());
+                            window.addEventListener('resize', () => this.update(), { passive: true });
+                        }
+                    }"
+                    x-init="init()"
+                >
+                    {{-- Soft edge fades --}}
+                    <div class="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-white to-transparent z-10"></div>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white to-transparent z-10"
+                        :class="{ 'opacity-0': atEnd }"></div>
 
+                    {{-- Scroller --}}
+                    <div
+                        id="pastRowScroller"
+                        x-ref="scroller"
+                        class="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth scrollbar-hide pr-14"
+                        @scroll="update()"
+                    >
+                        @foreach ($past as $event)
+                            <div class="snap-start shrink-0 w-[260px] sm:w-[300px]">
+                                @include('events.partials._event_card', ['event' => $event])
+                            </div>
+                        @endforeach
+                    </div>
 
+                    {{-- Single right arrow (desktop only) --}}
+                    <button
+                        type="button"
+                        @click="right()"
+                        class="hidden sm:flex items-center justify-center absolute right-3 top-1/2 -translate-y-1/2 h-12 w-12 rounded-full bg-white shadow ring-1 ring-gray-200 hover:bg-white z-20"
+                        :class="{ 'opacity-0 pointer-events-none': atEnd }"
+                        aria-label="Scroll right"
+                    >
+                        <svg class="h-6 w-6 text-gray-700" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M10 6l-1.41 1.41L13.17 12l-4.58 4.59L10 18l6-6z"/>
+                        </svg>
+                    </button>
+                </div>
+            </section>
+        @endif
 
 
         @if (!$featured->count() && !$upcoming->count() && !$past->count())
@@ -372,16 +390,4 @@
         </script>
         <script src="https://maps.googleapis.com/maps/api/js?key={{ urlencode(config('services.google.maps_key')) }}&libraries=places&callback=initHomePlaces" async defer></script>
     @endif
-
-    <style>
-    /* Hide scrollbar globally for past events carousel (works on all browsers) */
-    #pastEventsScroller {
-        -ms-overflow-style: none;  /* IE/Edge */
-        scrollbar-width: none;     /* Firefox */
-    }
-    #pastEventsScroller::-webkit-scrollbar {
-        display: none;             /* Chrome, Safari */
-    }
-</style>
-
 </x-app-layout>

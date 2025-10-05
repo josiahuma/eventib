@@ -31,60 +31,29 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.css" rel="stylesheet">
 
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9796795832966785"
-     crossorigin="anonymous"></script>
-
     <style>[x-cloak]{display:none!important}</style>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="font-sans antialiased">
-<div class="min-h-screen bg-gray-100">
+<body class="font-sans antialiased bg-gray-100">
+    {{-- Fixed nav height = 64px --}}
     @include('layouts.navigation')
 
-    @php
-    $isHome = request()->routeIs('homepage');
-    $headerWrapperClasses = $isHome
-            ? 'sticky top-16 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm'
-            : 'bg-white shadow';
-    @endphp
+    <div class="pt-16"> {{-- pushes all content below navbar --}}
+        @isset($header)
+            <header class="sticky top-16 z-[90] bg-white border-b border-gray-100 shadow-sm">
+                <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                    {{ $header }}
+                </div>
+            </header>
+        @endisset
 
-    @isset($header)
-        <header class="{{ $headerWrapperClasses }}">
-            <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-                {{ $header }}
-            </div>
-        </header>
-    @endisset
+        <main>
+            {{ $slot }}
+        </main>
+    </div>
 
-
-    <main>
-        {{ $slot }}
-    </main>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
-@include('layouts.footer')
-<script>
-  (function(d,t) {
-    var BASE_URL="https://app.chatwoot.com";
-    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
-    g.src=BASE_URL+"/packs/js/sdk.js";
-    g.async = true;
-    s.parentNode.insertBefore(g,s);
-    g.onload=function(){
-      window.chatwootSDK.run({
-        websiteToken: 'VJrjMrhURG7B3WrhUz5Hkhiz',
-        baseUrl: BASE_URL
-      })
-    }
-  })(document,"script");
-</script>
-
-<x-cookie-consent />
-<script>
-    (adsbygoogle = window.adsbygoogle || []).push({});
-</script>
-
+    @include('layouts.footer')
 </body>
+
 </html>

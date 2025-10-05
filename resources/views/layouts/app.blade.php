@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ config('app.name', 'Ovievent') }}</title>
+    <title>{{ config('app.name', 'Eventib') }}</title>
 
     @php
         $siteName   = config('app.name', 'eventib');
@@ -31,6 +31,9 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.css" rel="stylesheet">
 
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9796795832966785"
+     crossorigin="anonymous"></script>
+
     <style>[x-cloak]{display:none!important}</style>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -53,7 +56,28 @@
         </main>
     </div>
 
-    @include('layouts.footer')
-</body>
+<script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
+@include('layouts.footer')
+<script>
+  (function(d,t) {
+    var BASE_URL="https://app.chatwoot.com";
+    var g=d.createElement(t),s=d.getElementsByTagName(t)[0];
+    g.src=BASE_URL+"/packs/js/sdk.js";
+    g.async = true;
+    s.parentNode.insertBefore(g,s);
+    g.onload=function(){
+      window.chatwootSDK.run({
+        websiteToken: 'VJrjMrhURG7B3WrhUz5Hkhiz',
+        baseUrl: BASE_URL
+      })
+    }
+  })(document,"script");
+</script>
 
+<x-cookie-consent />
+<script>
+    (adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+
+</body>
 </html>

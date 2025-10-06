@@ -1,36 +1,50 @@
 {{-- resources/views/homepage.blade.php --}}
 <x-app-layout>
-    {{-- ===== Header with compact location search ===== --}}
+   {{-- ===== Header with sleek modern search ===== --}}
     <x-slot name="header">
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <h2 class="font-semibold text-2xl text-gray-800 leading-tight">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
+            <h2 class="font-semibold text-2xl text-gray-800 leading-tight flex-shrink-0">
                 Discover Events
             </h2>
 
-            {{-- Location-only search (keeps using ?q=... so no controller changes) --}}
-            <form action="{{ route('homepage') }}" method="GET" class="w-full sm:w-[440px]">
-                <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-200 flex items-stretch overflow-hidden">
-                    <div class="px-3 flex items-center text-gray-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"/>
+            {{-- Sleek search bar --}}
+            <form action="{{ route('homepage') }}" method="GET" class="flex-1 w-full">
+                <div class="relative flex items-center bg-gray-50 border rounded-full shadow-sm hover:shadow-md transition focus-within:ring-2 focus-within:ring-indigo-500">
+                    {{-- Left icon --}}
+                    <div class="pl-4 flex items-center text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 1010.5 3a7.5 7.5 0 006.15 13.65z" />
                         </svg>
                     </div>
+
+                    {{-- Input field --}}
                     <input
                         id="home-where"
                         type="text"
                         name="q"
                         value="{{ $q ?? '' }}"
                         placeholder="Where? (city, venue, area)"
-                        class="flex-1 border-0 focus:ring-0 text-[15px] placeholder-gray-400"
+                        class="flex-1 bg-transparent border-0 text-[15px] text-gray-700 placeholder-gray-400 focus:ring-0 px-3 py-2"
                         autocomplete="off"
                     />
-                    <button type="submit" class="px-4 bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">
-                        Search
+
+                    {{-- Right icon button --}}
+                    <button type="submit"
+                            class="absolute right-3 text-white bg-indigo-600 hover:bg-indigo-700 rounded-full p-2 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 1010.5 3a7.5 7.5 0 006.15 13.65z" />
+                        </svg>
                     </button>
                 </div>
             </form>
         </div>
     </x-slot>
+
+
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 

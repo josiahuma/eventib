@@ -11,7 +11,7 @@
 
                 <!-- Left links (visible to all) -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
-                    <x-nav-link :href="route('homepage')" :active="request()->routeIs('homepage')">Fine Events</x-nav-link>
+                    <x-nav-link :href="route('homepage')" :active="request()->routeIs('homepage')">Find Events</x-nav-link>
                     <x-nav-link :href="route('how')" :active="request()->routeIs('how')">How it works</x-nav-link>
                     <x-nav-link :href="route('pricing')" :active="request()->routeIs('pricing')">Pricing</x-nav-link>
                     <x-nav-link :href="route('about')" :active="request()->routeIs('about')">About</x-nav-link>

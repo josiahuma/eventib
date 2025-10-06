@@ -56,7 +56,7 @@
         </div>
 
         {{-- NOTE: pass $event to the handler so we can submit safely --}}
-        <form action="{{ route('events.store') }}" method="POST" enctype="multipart/form-data" @submit.prevent="validateAndSubmit($event)">
+        <form id="create-event-form" action="{{ route('events.store') }}" method="POST" enctype="multipart/form-data" @submit.prevent="validateAndSubmit()">
             @csrf
 
             {{-- always submit a currency (controller tolerates it for free) --}}
@@ -299,11 +299,15 @@
 
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Organizer</label>
-                                <select name="organizer_id" required>
-                                    @foreach($organizers as $organizer)
-                                        <option value="{{ $organizer->id }}">{{ $organizer->name }}</option>
-                                    @endforeach
-                                </select>
+                            <select name="organizer_id" required
+                                    class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
+                                <option value="">— Select organizer —</option>
+                                @foreach($organizers as $organizer)
+                                    <option value="{{ $organizer->id }}">
+                                        {{ $organizer->name }}
+                                    </option>
+                                @endforeach
+                            </select>
                         </div>
 
                         <div>
@@ -332,8 +336,41 @@
 
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                            <textarea name="description" rows="4" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500" placeholder="Tell people what to expect"></textarea>
+
+                            <div class="border border-gray-300 rounded-lg overflow-hidden">
+                                {{-- Quill toolbar --}}
+                                <div id="desc-toolbar" class="border-b bg-gray-50 px-2 py-1 text-sm">
+                                <span class="ql-formats">
+                                    <button class="ql-bold"></button>
+                                    <button class="ql-italic"></button>
+                                    <button class="ql-underline"></button>
+                                </span>
+                                <span class="ql-formats">
+                                    <button class="ql-list" value="ordered"></button>
+                                    <button class="ql-list" value="bullet"></button>
+                                </span>
+                                <span class="ql-formats">
+                                    <select class="ql-header">
+                                        <option selected></option>
+                                        <option value="2"></option>
+                                        <option value="3"></option>
+                                    </select>
+                                    <button class="ql-link"></button>
+                                    <button class="ql-blockquote"></button>
+                                </span>
+                            </div>
+
+                             {{-- Quill editor --}}
+                                <div id="desc-editor" class="min-h-[180px] bg-white overflow-y-auto"></div>
+                            </div>
+
+                            <input type="hidden" name="description" id="desc-html">
+
+                            <p class="text-xs text-gray-500 mt-1">
+                                Format text, add links and lists. We’ll save the formatted content.
+                            </p>
                         </div>
+
                     </div>
                 </div>
 
@@ -414,13 +451,23 @@
                 eligibleMethods: [],
                 chosenMethodId: null,
                 profilePayoutUrl: cfg.profilePayoutUrl,
+                descInited: false, // quill editor
 
                 init() {
                     this.updateCountry();
                     this.refreshEligible();
+
                     this.$watch('currency', () => { this.updateCountry(); this.refreshEligible(); });
                     this.$watch('pricing',  () => { this.refreshEligible(); });
+
+                    // Init editor when user lands on Basics
+                    this.$watch('step', (n) => {
+                        if (n === 2 && !this.descInited) {
+                            setTimeout(() => { window.initQuillDesc(); this.descInited = true; }, 100);
+                        }
+                    });
                 },
+
 
                 mapCurrencyToCountry(c) {
                     c = String(c || '').toUpperCase();
@@ -444,20 +491,27 @@
                     this.step = n; window.scrollTo({ top: 0, behavior: 'smooth' });
                 },
 
-                validateAndSubmit(e){
-                    if (this.pricing==='paid') {
+                validateAndSubmit() {
+                    if (this.pricing === 'paid') {
                         // ensure at least one ticket row with name + price
                         const rows = Array.from(document.querySelectorAll('#cat-rows .cat-row'));
                         const valid = rows.some(r => {
-                            const name  = r.querySelector('input[name$="[name]"]')?.value?.trim();
+                            const name = r.querySelector('input[name$="[name]"]')?.value?.trim();
                             const price = parseFloat(r.querySelector('input[name$="[price]"]')?.value || '0');
                             return name && price > 0;
                         });
                         if (!valid) { alert('Add at least one ticket type with a positive price.'); return; }
                         if (!this.chosenMethodId) { alert('Please choose a payout destination.'); return; }
                     }
-                    (e?.target || this.$el.querySelector('form'))?.submit();
+
+                    if (window._quillDesc) {
+                        document.getElementById('desc-html').value = window._quillDesc.root.innerHTML.trim();
+                    }
+
+                    // ✅ now submit the form normally
+                    document.getElementById('create-event-form').submit();
                 }
+
             }));
         });
 
@@ -560,4 +614,62 @@
     @if (config('services.google.maps_key'))
         <script src="https://maps.googleapis.com/maps/api/js?key={{ urlencode(config('services.google.maps_key')) }}&libraries=places&callback=initPlaces" async defer></script>
     @endif
+
+    {{-- Quill assets --}}
+    <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+
+    <script>
+        // Create once, reuse
+        window._quillDesc = null;
+        window.initQuillDesc = function () {
+            if (window._quillDesc || !window.Quill) return window._quillDesc;
+
+            const editor = document.getElementById('desc-editor');
+            const toolbar = document.getElementById('desc-toolbar');
+            const hidden  = document.getElementById('desc-html');
+            if (!editor || !toolbar || !hidden) return;
+
+            const q = new Quill(editor, {
+                theme: 'snow',
+                placeholder: 'Tell people what to expect',
+                modules: { toolbar: toolbar }
+            });
+
+            // Prefill from old() if validation failed
+            const initial = {!! json_encode(old('description','')) !!};
+            if (initial) q.clipboard.dangerouslyPasteHTML(initial);
+
+            const sync = () => hidden.value = q.root.innerHTML.trim();
+            q.on('text-change', sync);
+            sync();
+
+            window._quillDesc = q;
+            return q;
+        };
+    </script>
+    <style>
+    /* Quill editor clean layout fix */
+    #desc-editor .ql-editor {
+        min-height: 160px;
+        max-height: 400px;
+        padding: 0.75rem 1rem;
+        font-size: 0.95rem;
+        color: #111827; /* text-gray-900 */
+    }
+
+    #desc-editor .ql-editor.ql-blank::before {
+        color: #9ca3af; /* text-gray-400 */
+        font-style: italic;
+        content: attr(data-placeholder);
+    }
+
+    #desc-toolbar .ql-formats button svg {
+        width: 16px;
+        height: 16px;
+    }
+</style>
+
+
+
 </x-app-layout>

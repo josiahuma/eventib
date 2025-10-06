@@ -378,8 +378,42 @@
 
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                            <textarea name="description" rows="4"
-                                    class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">{{ old('description', $event->description) }}</textarea>
+
+                            {{-- Quill editor wrapper --}}
+                            <div class="border border-gray-300 rounded-lg overflow-hidden shadow-sm mb-2">
+                                {{-- Quill toolbar --}}
+                                <div id="desc-toolbar" class="border-b bg-gray-50 px-2 py-1 text-sm">
+                                    <span class="ql-formats">
+                                        <button class="ql-bold"></button>
+                                        <button class="ql-italic"></button>
+                                        <button class="ql-underline"></button>
+                                    </span>
+                                    <span class="ql-formats">
+                                        <button class="ql-list" value="ordered"></button>
+                                        <button class="ql-list" value="bullet"></button>
+                                    </span>
+                                    <span class="ql-formats">
+                                        <select class="ql-header">
+                                            <option selected></option>
+                                            <option value="2"></option>
+                                            <option value="3"></option>
+                                        </select>
+                                        <button class="ql-link"></button>
+                                        <button class="ql-blockquote"></button>
+                                    </span>
+                                </div>
+
+                                {{-- Hidden input (for form submission) --}}
+                                <input type="hidden" name="description" id="desc-html"
+                                    value="{{ old('description', $event->description) }}">
+
+                                {{-- Quill editor container --}}
+                                <div id="desc-editor" class="min-h-[180px] bg-white overflow-y-auto"></div>
+                            </div>
+
+                            <p class="text-xs text-gray-500 mt-1">
+                                Format text, add links and lists. We’ll save the formatted content.
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -689,4 +723,68 @@
     @if (config('services.google.maps_key'))
         <script src="https://maps.googleapis.com/maps/api/js?key={{ urlencode(config('services.google.maps_key')) }}&libraries=places&callback=initPlaces" async defer></script>
     @endif
+
+    {{-- Quill assets --}}
+<link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
+
+<style>
+#desc-editor .ql-editor {
+    min-height: 160px;
+    max-height: 400px;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    color: #111827; /* text-gray-900 */
+}
+#desc-editor .ql-editor.ql-blank::before {
+    color: #9ca3af; /* text-gray-400 */
+    font-style: italic;
+    content: attr(data-placeholder);
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const toolbar = document.getElementById('desc-toolbar');
+    const editor = document.getElementById('desc-editor');
+    const hidden = document.getElementById('desc-html');
+    if (!toolbar || !editor || !hidden) return;
+
+    const quill = new Quill(editor, {
+        theme: 'snow',
+        placeholder: 'Tell people what to expect',
+        modules: { toolbar: toolbar },
+    });
+
+    // Prefill existing HTML content
+    const existing = hidden.value || '';
+    if (existing.trim() !== '') {
+        quill.clipboard.dangerouslyPasteHTML(existing);
+    }
+
+    // Sync to hidden field on change
+    quill.on('text-change', function () {
+        hidden.value = quill.root.innerHTML.trim();
+    });
+});
+</script>
+
+<style>
+#desc-editor .ql-editor {
+    min-height: 160px;
+    max-height: 400px;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    color: #111827; /* text-gray-900 */
+}
+
+#desc-editor .ql-editor.ql-blank::before {
+    color: #9ca3af; /* text-gray-400 */
+    font-style: italic;
+    content: attr(data-placeholder);
+}
+</style>
+
+
 </x-app-layout>

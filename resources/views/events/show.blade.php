@@ -184,8 +184,8 @@
                             }
                         @endphp
 
-                        <div class="prose max-w-none mt-2 text-gray-700">
-                            {!! nl2br(linkify($event->description)) !!}
+                        <div class="prose prose-indigo prose-a:text-indigo-600 hover:prose-a:text-orange-600 max-w-none">
+                            {!! $event->description !!}
                         </div>
 
                     </div>

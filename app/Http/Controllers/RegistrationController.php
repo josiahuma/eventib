@@ -29,20 +29,21 @@ class RegistrationController extends Controller
 
         // Only flag duplicates for FREE events (not paid categories)
         $alreadyRegistered = false;
-        if (! $isPaidEvent) {
+
+        if (! $isPaidEvent && Auth::check()) {
             $alreadyRegistered = EventRegistration::query()
                 ->where('event_id', $event->id)
                 ->whereNotIn('status', ['canceled', 'cancelled', 'failed'])
                 ->where(function ($q) {
-                    if (Auth::check()) {
-                        $q->where('user_id', Auth::id());
-                    }
+                    $q->where('user_id', Auth::id());
                     if (Auth::user()?->email) {
                         $q->orWhere('email', Auth::user()->email);
                     }
                 })
                 ->exists();
         }
+
+
 
         return view('events.register', [
             'event'             => $event,

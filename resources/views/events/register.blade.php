@@ -102,7 +102,7 @@
                                value="{{ old('email', optional(auth()->user())->email) }}"
                                class="mt-1 w-full rounded-lg border-gray-300" required>
                         {{-- This flag is set ONLY for free events in the controller --}}
-                        @if(!empty($alreadyRegistered))
+                        @if(Auth::check() && !empty($alreadyRegistered))                            
                             <p class="text-sm text-rose-600 mt-1">You are already registered for this event.</p>
                         @endif
                         @error('email') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror

@@ -321,32 +321,61 @@ class TicketController extends Controller
 
         // FREE pass
         if ($prefix === 'FR') {
-            if (count($parts) !== 5) return response()->json(['ok'=>false,'reason'=>'Invalid QR format'], 422);
+            if (count($parts) !== 5) {
+                return response()->json(['ok' => false, 'reason' => 'Invalid QR format'], 422);
+            }
+
             [, , $eventPid, $regId, $token] = $parts;
-            if ($eventPid !== $event->public_id) return response()->json(['ok'=>false,'reason'=>'Wrong event'], 422);
 
-            $reg = EventRegistration::where('id', $regId)->where('event_id', $event->id)->first();
-            if (!$reg) return response()->json(['ok'=>false,'reason'=>'Registration not found'], 404);
+            if ($eventPid !== $event->public_id) {
+                return response()->json(['ok' => false, 'reason' => 'Wrong event'], 422);
+            }
 
-            if (!hash_equals($reg->expectedFreePassToken(), $token)) {
-                return response()->json(['ok'=>false,'reason'=>'Invalid pass token'], 422);
+            // ✅ Match either qr_token or expectedFreePassToken() for backward compatibility
+            $reg = EventRegistration::where('event_id', $event->id)
+                ->where(function ($q) use ($regId, $token) {
+                    $q->where('id', $regId)
+                    ->where(function ($qq) use ($token) {
+                        $qq->where('qr_token', $token)
+                            ->orWhereRaw('BINARY `qr_token` = ?', [$token]);
+                    });
+                })
+                ->first();
+
+            // Fallback for old tokens
+            if (! $reg && $regId) {
+                $fallback = EventRegistration::find($regId);
+                if ($fallback && hash_equals($fallback->expectedFreePassToken(), $token)) {
+                    $reg = $fallback;
+                }
+            }
+
+            if (! $reg) {
+                return response()->json(['ok' => false, 'reason' => 'Invalid pass token'], 422);
             }
 
             $already = (bool) $reg->checked_in_at;
-            if (!$already) {
-                $reg->forceFill(['checked_in_at' => now(), 'checked_in_by' => $u->id])->save();
+            if (! $already) {
+                $reg->forceFill([
+                    'checked_in_at' => now(),
+                    'checked_in_by' => $u->id,
+                ])->save();
             }
 
-            $party = 1 + (int)($reg->party_adults ?? 0) + (int)($reg->party_children ?? 0);
+            $party = 1
+                + (int) ($reg->party_adults ?? 0)
+                + (int) ($reg->party_children ?? 0);
 
             return response()->json([
-                'ok' => true, 'type' => 'free', 'already' => $already, 'party' => $party,
-                'checked_in_at' => optional($reg->checked_in_at)->toIso8601String(),
+                'ok'             => true,
+                'type'           => 'free',
+                'already'        => $already,
+                'party'          => $party,
+                'checked_in_at'  => optional($reg->checked_in_at)->toIso8601String(),
             ]);
         }
-
-        return response()->json(['ok' => false, 'reason' => 'Unknown QR type'], 422);
     }
+
 
     /**
      * Idempotently create/trim VALID tickets for a paid registration and return them (ordered).

@@ -38,7 +38,9 @@ class AdminDashboardController extends Controller
             'payouts_total'     => EventPayout::count(),
             'payouts_processing'=> EventPayout::where('status', 'processing')->count(),
             'payouts_paid'      => EventPayout::where('status', 'paid')->count(),
-            'registrants_total'=> EventRegistration::count(),
+            'registrants_total'=> Event::join('event_registrations', 'events.id', '=', 'event_registrations.event_id')
+                                        ->where('events.is_disabled', false)
+                                        ->count(),
         ];
 
         return view('admin.dashboard', compact('stats'));

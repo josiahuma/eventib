@@ -9,7 +9,7 @@
 
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {{-- Quick stats --}}
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
             <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                 <div class="text-sm text-gray-500">Users</div>
                 <div class="mt-1 text-2xl font-semibold">{{ number_format($stats['users_total']) }}</div>
@@ -19,6 +19,11 @@
                 <div class="text-sm text-gray-500">Events</div>
                 <div class="mt-1 text-2xl font-semibold">{{ number_format($stats['events_total']) }}</div>
                 <div class="text-xs text-gray-500 mt-1">Disabled: {{ number_format($stats['events_disabled']) }}</div>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <div class="text-sm text-gray-500">Attendee Registrants</div>
+                <div class="mt-1 text-2xl font-semibold">{{ number_format($stats['registrants_total']) }}</div>
+                <div class="text-xs text-gray-500 mt-1">Total across all events</div>
             </div>
             <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
                 <div class="text-sm text-gray-500">Payouts</div>

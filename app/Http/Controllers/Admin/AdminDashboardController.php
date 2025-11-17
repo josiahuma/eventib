@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\EventPayout;
 use App\Models\User;
+use App\Models\EventRegistration;
 use Illuminate\Support\Facades\Auth;
 
 class AdminDashboardController extends Controller
@@ -37,6 +38,7 @@ class AdminDashboardController extends Controller
             'payouts_total'     => EventPayout::count(),
             'payouts_processing'=> EventPayout::where('status', 'processing')->count(),
             'payouts_paid'      => EventPayout::where('status', 'paid')->count(),
+            'registrants_total'=> EventRegistration::count(),
         ];
 
         return view('admin.dashboard', compact('stats'));

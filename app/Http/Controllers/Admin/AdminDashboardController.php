@@ -30,6 +30,11 @@ class AdminDashboardController extends Controller
     {
         $this->ensureAdmin();
 
+        $registrantsTotal = EventRegistration::query()
+        ->whereIn('status', ['free', 'paid']) // only real registrations
+        ->selectRaw('COALESCE(SUM(COALESCE(quantity,1) + COALESCE(party_adults,0) + COALESCE(party_children,0)), 0) as total')
+        ->value('total');
+
         $stats = [
             'users_total'       => User::count(),
             'users_disabled'    => User::where('is_disabled', true)->count(),
@@ -38,9 +43,8 @@ class AdminDashboardController extends Controller
             'payouts_total'     => EventPayout::count(),
             'payouts_processing'=> EventPayout::where('status', 'processing')->count(),
             'payouts_paid'      => EventPayout::where('status', 'paid')->count(),
-            'registrants_total'=> Event::join('event_registrations', 'events.id', '=', 'event_registrations.event_id')
-                                        ->where('events.is_disabled', false)
-                                        ->count(),
+            // 🔁 UPDATED: now counts attendees (including party size)
+            'registrants_total'  => (int) $registrantsTotal,
         ];
 
         return view('admin.dashboard', compact('stats'));

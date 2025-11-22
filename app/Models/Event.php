@@ -17,6 +17,7 @@ class Event extends Model
         'ticket_currency','payout_method_id', 'is_disabled',
         'fee_mode', 'fee_bps',
         'is_recurring', 'recurrence_summary',
+        'capacity',
     ];
 
     protected $casts = [

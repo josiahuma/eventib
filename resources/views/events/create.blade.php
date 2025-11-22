@@ -76,6 +76,25 @@
                             <span>Paid event</span>
                         </label>
                     </div>
+                    {{-- 🔹 NEW: capacity for ALL events (especially free) --}}
+                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Maximum attendees (optional)
+                            </label>
+                            <input
+                                type="number"
+                                min="0"
+                                name="capacity"
+                                value="{{ old('capacity') }}"
+                                class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
+                                placeholder="e.g., 150"
+                            >
+                            <p class="text-xs text-gray-500 mt-1">
+                                Leave blank for unlimited. For free events this limits total registrations.
+                            </p>
+                        </div>
+                    </div>
 
                     {{-- Currency (paid only) --}}
                     <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4" x-show="pricing==='paid'">

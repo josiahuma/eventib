@@ -149,6 +149,7 @@ class EventController extends Controller
             'sessions.*.name' => 'required|string|max:255',
             'sessions.*.date' => 'required|date',
             'sessions.*.time' => 'required',
+            'capacity'        => 'nullable|integer|min:0',
 
             'payout_method_id'  => ['nullable','integer', Rule::exists('user_payout_methods', 'id')->where(fn ($q) => $q->where('user_id', Auth::id()))],
         ]);
@@ -223,6 +224,7 @@ class EventController extends Controller
             'fee_bps'          => $feeBps,
             'is_recurring'       => $request->boolean('is_recurring'),
             'recurrence_summary' => $request->input('recurrence_summary') ?: null,
+            'capacity'         => $validated['capacity'] ?? null,
         ]);
 
         if ($request->has('sessions')) {
@@ -277,6 +279,7 @@ class EventController extends Controller
             'description'   => 'nullable|string',
             'is_recurring'   => 'nullable|boolean',
             'recurrence_summary' => 'nullable|string|max:255',
+            'capacity'      => 'nullable|integer|min:0',
 
             // media
             'avatar'        => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
@@ -310,6 +313,7 @@ class EventController extends Controller
         $event->tags             = json_encode($tagsArray);
         $event->location         = $validated['location'] ?? null;
         $event->description      = $validated['description'] ?? null;
+        $event->capacity         = $validated['capacity'] ?? null;
 
         // ⚠️ Do NOT touch ticket_cost, ticket_currency, payout_method_id, fee_mode, fee_bps here.
         // They are locked after creation.

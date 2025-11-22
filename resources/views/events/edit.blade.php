@@ -62,6 +62,10 @@
         // Sessions for edit
         $existingSessions = $event->sessions()->orderBy('session_date')->get();
         $existingCount    = $existingSessions->count();
+
+        // Fee mode + initial payout method (used in step 1 + Alpine config)
+        $feeMode = old('fee_mode', $event->fee_mode ?? 'absorb');
+        $initialPayoutMethodId = old('payout_method_id', $event->payout_method_id);
     @endphp
 
     <div
@@ -69,7 +73,8 @@
             methods: @js($rawMethods),
             defaultCurrency: '{{ $initialCurrency }}',
             defaultPaid: {{ $initialPaid ? 'true' : 'false' }},
-            profilePayoutUrl: '{{ route('profile.payouts') }}'
+            profilePayoutUrl: '{{ route('profile.payouts') }}',
+            defaultPayoutMethodId: {{ $initialPayoutMethodId ? (int) $initialPayoutMethodId : 'null' }}
         })"
         class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
     >
@@ -98,11 +103,11 @@
             @csrf
             @method('PUT')
 
-            {{-- STEP 1 — Pricing & Payout (READ-ONLY / LOCKED) --}}
-            @php
-                $feeMode = old('fee_mode', $event->fee_mode ?? 'absorb');
-            @endphp
+            {{-- keep fee_mode + currency fixed via hidden inputs --}}
+            <input type="hidden" name="fee_mode" value="{{ $feeMode }}">
+            <input type="hidden" name="ticket_currency" value="{{ $event->ticket_currency }}">
 
+            {{-- STEP 1 — Pricing & Payout (pricing locked; capacity + payout editable) --}}
             <section x-show="step === 1" x-cloak class="space-y-6">
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <div class="flex items-start justify-between">
@@ -111,16 +116,16 @@
                             <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                 <path d="M12 2a5 5 0 00-5 5v3H6a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2h-1V7a5 5 0 00-5-5zm-3 8V7a3 3 0 116 0v3H9z"/>
                             </svg>
-                            Locked after creation
+                            Pricing locked
                         </span>
                     </div>
 
                     <p class="mt-2 text-sm text-gray-600">
-                        Pricing, ticket types and payout destination are fixed once the event is created.
-                        You can still edit the basics, schedule and media below.
+                        You can change <strong>capacity</strong> and <strong>payout destination</strong> at any time.
+                        Pricing type (free vs paid), currency and ticket amounts stay fixed after creation.
                     </p>
 
-                    {{-- Just a brief read-only summary --}}
+                    {{-- Summary --}}
                     <div class="mt-4 grid gap-3 text-sm text-gray-700">
                         <div>
                             <span class="font-medium">Event type:</span>
@@ -148,6 +153,67 @@
                             </div>
                         @endif
                     </div>
+
+                    {{-- 🔓 Capacity (editable for ALL events) --}}
+                    <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Maximum attendees (optional)
+                            </label>
+                            <input
+                                type="number"
+                                min="0"
+                                name="capacity"
+                                value="{{ old('capacity', $event->capacity) }}"
+                                class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500"
+                                placeholder="e.g., 150"
+                            >
+                            <p class="text-xs text-gray-500 mt-1">
+                                Leave blank for unlimited. Free events will stop accepting registrations when this limit is reached.
+                            </p>
+                        </div>
+                    </div>
+
+                    {{-- 🔓 Payout destination (paid events only) --}}
+                    @if($initialPaid)
+                        <div class="mt-6 border-t border-gray-200 pt-4" x-show="pricing === 'paid'">
+                            <h4 class="text-sm font-semibold text-gray-900">Payout destination</h4>
+
+                            <template x-if="eligibleMethods.length">
+                                <div class="mt-3 grid grid-cols-1 gap-3">
+                                    <template x-for="m in eligibleMethods" :key="m.id">
+                                        <label
+                                            class="cursor-pointer rounded-xl border p-3 flex items-start gap-3"
+                                            :class="chosenMethodId === m.id ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white'"
+                                        >
+                                            <input
+                                                type="radio"
+                                                class="mt-1 text-indigo-600 border-gray-300"
+                                                name="payout_method_id"
+                                                :value="m.id"
+                                                x-model="chosenMethodId"
+                                            >
+                                            <div>
+                                                <div class="font-medium text-gray-900" x-text="methodTitle(m)"></div>
+                                                <div class="text-sm text-gray-600" x-text="methodSubtitle(m)"></div>
+                                            </div>
+                                        </label>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <div
+                                class="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 text-xs"
+                                x-show="pricing === 'paid' && !eligibleMethods.length"
+                            >
+                                No payout method saved for
+                                <span class="font-semibold" x-text="country"></span>.
+                                <a class="underline" :href="profilePayoutUrl + '?country=' + country" target="_blank">
+                                    Add one now
+                                </a>, then refresh this page.
+                            </div>
+                        </div>
+                    @endif
                 </div>
 
                 <div class="flex items-center justify-between">
@@ -441,18 +507,20 @@
                 step: 1,
 
                 currencies: ['GBP','USD','CAD','AUD','INR','NGN','KES','GHS','EUR'],
-                pricing: cfg.defaultPaid ? 'paid' : 'free',
-                currency: (cfg.defaultCurrency || 'GBP').toUpperCase(),
+                pricing: cfg.defaultPaid ? 'paid' : 'free',            // locked: we never change this in UI
+                currency: (cfg.defaultCurrency || 'GBP').toUpperCase(),// locked: no input for this
 
                 country: '',
                 allMethods: cfg.methods || [],
                 eligibleMethods: [],
-                chosenMethodId: null,
+                chosenMethodId: cfg.defaultPayoutMethodId || null,
                 profilePayoutUrl: cfg.profilePayoutUrl,
 
                 init() {
                     this.updateCountry();
                     this.refreshEligible();
+
+                    // watchers are harmless (currency/pricing aren't editable in UI)
                     this.$watch('currency', () => { this.updateCountry(); this.refreshEligible(); });
                     this.$watch('pricing',  () => { this.refreshEligible(); });
                 },
@@ -466,17 +534,39 @@
                 updateCountry() { this.country = this.mapCurrencyToCountry(this.currency); },
 
                 refreshEligible() {
-                    if (this.pricing !== 'paid') { this.eligibleMethods = []; this.chosenMethodId = null; return; }
-                    const banks  = this.allMethods.filter(m => m.type === 'bank' && (m.country || '').toUpperCase() === this.country);
+                    if (this.pricing !== 'paid') {
+                        this.eligibleMethods = [];
+                        this.chosenMethodId = null;
+                        return;
+                    }
+
+                    const banks  = this.allMethods.filter(
+                        m => m.type === 'bank' && (m.country || '').toUpperCase() === this.country
+                    );
                     const paypal = this.allMethods.find(m => m.type === 'paypal');
                     this.eligibleMethods = paypal ? [...banks, paypal] : banks;
-                    this.chosenMethodId  = this.eligibleMethods.length ? this.eligibleMethods[0].id : null;
+
+                    if (!this.eligibleMethods.length) {
+                        this.chosenMethodId = null;
+                        return;
+                    }
+
+                    // keep existing payout if still valid, otherwise default to first
+                    const stillValid = this.eligibleMethods.find(m => m.id === this.chosenMethodId);
+                    if (!stillValid) {
+                        this.chosenMethodId = this.eligibleMethods[0].id;
+                    }
                 },
 
-                methodTitle(m)  { return m.type === 'bank' ? `Bank — ${m.country}` : 'PayPal'; },
-                methodSubtitle(m){ return m.type === 'bank' ? (m.last4 ? `${m.label} — ****${m.last4}` : m.label) : (m.email || m.label); },
+                methodTitle(m)   { return m.type === 'bank' ? `Bank — ${m.country}` : 'PayPal'; },
+                methodSubtitle(m){ return m.type === 'bank'
+                                        ? (m.last4 ? `${m.label} — ****${m.last4}` : m.label)
+                                        : (m.email || m.label); },
 
-                goStep(n) { this.step = n; window.scrollTo({ top: 0, behavior: 'smooth' }); }
+                goStep(n) {
+                    this.step = n;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
             }));
         });
 

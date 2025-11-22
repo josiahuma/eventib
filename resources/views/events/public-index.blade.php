@@ -288,22 +288,46 @@
 
         {{-- ===== Upcoming ===== --}}
         @if ($upcoming->count())
-            <section class="mb-10">
+            <section
+                class="mb-10"
+                x-data="upcomingInfinite()"
+                x-init="init()"
+            >
                 <div class="flex items-center justify-between mb-3">
                     <h3 class="text-2xl font-bold text-gray-900">Upcoming Events</h3>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {{-- Grid of cards --}}
+                <div
+                    id="upcoming-grid"
+                    x-ref="grid"
+                    class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+                >
                     @foreach ($upcoming as $event)
                         @include('events.partials._event_card', ['event' => $event])
                     @endforeach
                 </div>
 
-                <div class="mt-6">
+                {{-- Keep Laravel pagination in the DOM, but hide it via Alpine --}}
+                <div
+                    id="upcoming-pagination"
+                    x-ref="pagination"
+                    class="mt-6"
+                >
                     {{ $upcoming->withQueryString()->links('pagination::tailwind', ['paginator' => $upcoming]) }}
+                </div>
+
+                {{-- Infinite scroll sentinel / status --}}
+                <div
+                    x-ref="sentinel"
+                    class="mt-4 flex items-center justify-center text-sm text-gray-500 h-10"
+                >
+                    <span x-show="loading">Loading more events…</span>
+                    <span x-show="!loading && !nextUrl">You’ve reached the end.</span>
                 </div>
             </section>
         @endif
+
 
         {{-- ===== Past Events (horizontal scroll) ===== --}}
         @if ($past->count())
@@ -402,6 +426,92 @@
                 });
             };
         </script>
+        <script>
+            document.addEventListener('alpine:init', () => {
+                Alpine.data('upcomingInfinite', () => ({
+                    nextUrl: null,
+                    loading: false,
+                    observer: null,
+
+                    init() {
+                        // 1) Find the next-page URL from the hidden pagination
+                        const nav = this.$refs.pagination;
+                        if (nav) {
+                            const nextLink =
+                                nav.querySelector('a[rel="next"]') ||
+                                nav.querySelector('a[aria-label="Next &raquo;"]');
+
+                            this.nextUrl = nextLink ? nextLink.href : null;
+
+                            // Hide pagination visually (but keep it for non-JS)
+                            nav.classList.add('hidden');
+                        }
+
+                        // 2) Set up IntersectionObserver for the sentinel
+                        const sentinel = this.$refs.sentinel;
+                        if (!sentinel) return;
+
+                        this.observer = new IntersectionObserver(
+                            (entries) => {
+                                entries.forEach(entry => {
+                                    if (entry.isIntersecting) {
+                                        this.loadMore();
+                                    }
+                                });
+                            },
+                            {
+                                root: null,
+                                rootMargin: '0px 0px 200px 0px',
+                                threshold: 0.1,
+                            }
+                        );
+
+                        this.observer.observe(sentinel);
+                    },
+
+                    async loadMore() {
+                        if (!this.nextUrl || this.loading) return;
+                        this.loading = true;
+
+                        try {
+                            const res = await fetch(this.nextUrl, {
+                                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                            });
+                            const html = await res.text();
+
+                            // Parse the returned HTML and extract upcoming chunk
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(html, 'text/html');
+
+                            const newGrid = doc.querySelector('#upcoming-grid');
+                            const newPagination = doc.querySelector('#upcoming-pagination');
+
+                            if (newGrid) {
+                                Array.from(newGrid.children).forEach(child => {
+                                    this.$refs.grid.appendChild(child);
+                                });
+                            }
+
+                            if (newPagination) {
+                                const nextLink =
+                                    newPagination.querySelector('a[rel="next"]') ||
+                                    newPagination.querySelector('a[aria-label="Next &raquo;"]');
+
+                                this.nextUrl = nextLink ? nextLink.href : null;
+                            } else {
+                                this.nextUrl = null;
+                            }
+                        } catch (e) {
+                            console.error('Failed to load more events', e);
+                            this.nextUrl = null;
+                        } finally {
+                            this.loading = false;
+                        }
+                    },
+                }));
+            });
+        </script>
+
         <script src="https://maps.googleapis.com/maps/api/js?key={{ urlencode(config('services.google.maps_key')) }}&libraries=places&callback=initHomePlaces" async defer></script>
     @endif
 </x-app-layout>

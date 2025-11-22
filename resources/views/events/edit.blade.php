@@ -98,217 +98,63 @@
             @csrf
             @method('PUT')
 
-            {{-- STEP 1 — Pricing & Payout --}}
+            {{-- STEP 1 — Pricing & Payout (READ-ONLY / LOCKED) --}}
+            @php
+                $feeMode = old('fee_mode', $event->fee_mode ?? 'absorb');
+            @endphp
+
             <section x-show="step === 1" x-cloak class="space-y-6">
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-                    <h3 class="text-lg font-semibold text-gray-900">Pricing</h3>
-
-                    <div class="mt-4 flex flex-wrap gap-6">
-                        <label class="inline-flex items-center gap-2">
-                            <input type="radio" class="text-indigo-600 border-gray-300" value="free" x-model="pricing" name="pricing">
-                            <span>Free event</span>
-                        </label>
-                        <label class="inline-flex items-center gap-2">
-                            <input type="radio" class="text-indigo-600 border-gray-300" value="paid" x-model="pricing" name="pricing">
-                            <span>Paid event</span>
-                        </label>
-                    </div>
-
-                    {{-- Currency (paid only) --}}
-                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4" x-show="pricing==='paid'">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-                            <select name="ticket_currency" x-model="currency" :required="pricing==='paid'"
-                                    class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
-                                <template x-for="c in currencies" :key="c"><option :value="c" x-text="c"></option></template>
-                            </select>
-                            <p class="text-xs text-gray-500 mt-1">We’ll map currency to payout country automatically.</p>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Ticket Types (paid only) --}}
-                <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-gray-900">Ticket types</h3>
-                    </div>
-                    <p class="text-sm text-gray-600 mt-2">
-                        Create one or more tickets (e.g., Standard, VIP, Early Bird).
-                    </p>
-
-                    <div id="cat-rows" class="mt-4 space-y-3">
-                        @foreach($catsExisting as $i => $c)
-                            <div class="cat-row rounded-lg border border-gray-200 p-3">
-                                <input type="hidden" name="categories[{{ $i }}][id]" value="{{ $c->id }}">
-                                <div class="grid grid-cols-1 sm:grid-cols-12 sm:gap-3">
-                                    <div class="sm:col-span-5">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Ticket name</label>
-                                        <input name="categories[{{ $i }}][name]" value="{{ $c->name }}" class="w-full rounded-lg border-gray-300" placeholder="e.g., Standard">
-                                    </div>
-
-                                    <div class="sm:col-span-3 mt-3 sm:mt-0">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Price</label>
-                                        <input type="number" step="0.01" min="0" name="categories[{{ $i }}][price]" value="{{ $c->price }}" class="w-full rounded-lg border-gray-300" placeholder="0.00">
-                                    </div>
-
-                                    <div class="sm:col-span-3 mt-3 sm:mt-0">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Capacity (optional)</label>
-                                        <input type="number" min="0" name="categories[{{ $i }}][capacity]" value="{{ $c->capacity }}" class="w-full rounded-lg border-gray-300" placeholder="e.g., 100">
-                                    </div>
-
-                                    <div class="sm:col-span-1 mt-3 sm:mt-0">
-                                        <label class="block text-sm font-medium text-gray-700 mb-1">Sort</label>
-                                        <input type="number" min="0" name="categories[{{ $i }}][sort]" value="{{ $c->sort }}" class="w-full rounded-lg border-gray-300" placeholder="0">
-                                    </div>
-
-                                    <div class="sm:col-span-12 mt-3 flex items-center justify-between">
-                                        <label class="inline-flex items-center gap-2 text-sm">
-                                            <input type="checkbox" name="categories[{{ $i }}][is_active]" value="1" @checked($c->is_active) class="rounded border-gray-300">
-                                            <span class="text-gray-700">Active</span>
-                                        </label>
-
-                                        <button type="button" class="remove-cat text-rose-600 text-sm">Remove</button>
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-
-                    {{-- template for adding new rows on Edit --}}
-                    <template id="cat-tpl">
-                        <div class="cat-row rounded-lg border border-gray-200 p-3">
-                            <input type="hidden" name="__IDX__[id]" value="">
-                            <div class="grid grid-cols-1 sm:grid-cols-12 sm:gap-3">
-                                <div class="sm:col-span-5">
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Ticket name</label>
-                                    <input name="__IDX__[name]" class="w-full rounded-lg border-gray-300" placeholder="e.g., VIP">
-                                </div>
-                                <div class="sm:col-span-3 mt-3 sm:mt-0">
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Price</label>
-                                    <input type="number" step="0.01" min="0" name="__IDX__[price]" class="w-full rounded-lg border-gray-300" placeholder="0.00">
-                                </div>
-                                <div class="sm:col-span-3 mt-3 sm:mt-0">
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Capacity (optional)</label>
-                                    <input type="number" min="0" name="__IDX__[capacity]" class="w-full rounded-lg border-gray-300" placeholder="e.g., 100">
-                                </div>
-                                <div class="sm:col-span-1 mt-3 sm:mt-0">
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Sort</label>
-                                    <input type="number" min="0" name="__IDX__[sort]" value="0" class="w-full rounded-lg border-gray-300" placeholder="0">
-                                </div>
-                                <div class="sm:col-span-12 mt-3 flex items-center justify-between">
-                                    <label class="inline-flex items-center gap-2 text-sm">
-                                        <input type="checkbox" name="__IDX__[is_active]" value="1" checked class="rounded border-gray-300">
-                                        <span class="text-gray-700">Active</span>
-                                    </label>
-                                    <button type="button" class="remove-cat text-rose-600 text-sm">Remove</button>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                    <button type="button" id="add-cat" class="mt-3 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700">
-                       + Add another ticket type
-                    </button>
-                </div>
-
-                {{-- Fee handling (paid only, READ-ONLY on edit) --}}
-                @php
-                    // whatever the event currently has; default to 'absorb' if missing
-                    $feeMode = old('fee_mode', $event->fee_mode ?? 'absorb');
-                @endphp
-
-                <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
                     <div class="flex items-start justify-between">
-                        <h3 class="text-lg font-semibold text-gray-900">Platform fee</h3>
-                        <span class="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700"
-                            title="This setting is locked after the event is created.">
-                            {{-- lock icon --}}
+                        <h3 class="text-lg font-semibold text-gray-900">Pricing & payout</h3>
+                        <span class="inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
                             <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                                 <path d="M12 2a5 5 0 00-5 5v3H6a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2h-1V7a5 5 0 00-5-5zm-3 8V7a3 3 0 116 0v3H9z"/>
                             </svg>
-                            Locked
+                            Locked after creation
                         </span>
                     </div>
 
-                    <p class="text-sm text-gray-600 mt-1">
-                        Payment processing fee is <b>5.9%</b> per transaction. This choice was made when the event was created and
-                        can’t be changed here.
+                    <p class="mt-2 text-sm text-gray-600">
+                        Pricing, ticket types and payout destination are fixed once the event is created.
+                        You can still edit the basics, schedule and media below.
                     </p>
 
-                    {{-- Keep submitting the saved value, even though radios are disabled --}}
-                    <input type="hidden" name="fee_mode" value="{{ $feeMode }}">
-
-                    {{-- Make the radios visibly disabled and non-interactive --}}
-                    <div class="mt-4 space-y-3 opacity-60 pointer-events-none select-none">
-                        <label class="flex items-start gap-3">
-                            <input type="radio" class="mt-1 text-indigo-600 border-gray-300"
-                                name="fee_mode_view" value="absorb" disabled
-                                @checked($feeMode === 'absorb')>
-                            <div>
-                                <div class="font-medium text-gray-900">Organiser absorbs fee</div>
-                                <div class="text-sm text-gray-600">
-                                    Attendees pay the ticket price. Your payout is ticket revenue minus 5.9%.
-                                </div>
-                            </div>
-                        </label>
-
-                        <label class="flex items-start gap-3">
-                            <input type="radio" class="mt-1 text-indigo-600 border-gray-300"
-                                name="fee_mode_view" value="pass" disabled
-                                @checked($feeMode === 'pass')>
-                            <div>
-                                <div class="font-medium text-gray-900">Pass fee to attendees</div>
-                                <div class="text-sm text-gray-600">
-                                    Attendees pay ticket price <i>plus</i> 5.9% at checkout. Your payout is the full ticket price.
-                                </div>
-                            </div>
-                        </label>
-                    </div>
-
-                    {{-- Optional: clarify the active mode --}}
-                    <div class="mt-3 text-xs text-gray-500">
-                        Current setting: <span class="font-medium text-gray-800">
-                            {{ $feeMode === 'pass' ? 'Pass fee to attendees' : 'Organiser absorbs fee' }}
-                        </span>
-                    </div>
-                </div>                
-
-                {{-- Payout destination (paid only) --}}
-                <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
-                    <h3 class="text-lg font-semibold text-gray-900">Payout destination</h3>
-
-                    <template x-if="eligibleMethods.length">
-                        <div class="mt-3 grid grid-cols-1 gap-3">
-                            <template x-for="m in eligibleMethods" :key="m.id">
-                                <label class="cursor-pointer rounded-xl border p-3 flex items-start gap-3"
-                                       :class="chosenMethodId===m.id ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white'">
-                                    <input type="radio" class="mt-1 text-indigo-600 border-gray-300"
-                                           name="payout_method_id" :value="m.id" x-model="chosenMethodId">
-                                    <div>
-                                        <div class="font-medium text-gray-900" x-text="methodTitle(m)"></div>
-                                        <div class="text-sm text-gray-600" x-text="methodSubtitle(m)"></div>
-                                    </div>
-                                </label>
-                            </template>
+                    {{-- Just a brief read-only summary --}}
+                    <div class="mt-4 grid gap-3 text-sm text-gray-700">
+                        <div>
+                            <span class="font-medium">Event type:</span>
+                            @if($initialPaid)
+                                <span class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                                    Paid
+                                </span>
+                            @else
+                                <span class="ml-1 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                                    Free
+                                </span>
+                            @endif
                         </div>
-                    </template>
 
-                    <div class="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 text-sm"
-                         x-show="pricing==='paid' && !eligibleMethods.length">
-                        No payout method saved for <span class="font-semibold" x-text="country"></span>.
-                        <a class="underline" :href="profilePayoutUrl + '?country=' + country" target="_blank">Add one now</a>, then refresh.
+                        @if($initialPaid)
+                            <div>
+                                <span class="font-medium">Currency:</span>
+                                <span class="ml-1">{{ strtoupper($event->ticket_currency ?? 'GBP') }}</span>
+                            </div>
+                            <div>
+                                <span class="font-medium">Platform fee mode:</span>
+                                <span class="ml-1">
+                                    {{ $feeMode === 'pass' ? 'Pass fee to attendees' : 'Organiser absorbs fee' }}
+                                </span>
+                            </div>
+                        @endif
                     </div>
                 </div>
 
                 <div class="flex items-center justify-between">
-                    <span class="text-sm text-amber-700" x-show="pricing==='paid' && !chosenMethodId">
-                        Select a payout destination to continue.
-                    </span>
-
+                    <span></span>
                     <button type="button"
                             @click="goStep(2)"
-                            :disabled="pricing==='paid' && !chosenMethodId"
-                            aria-disabled="true"
-                            class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                            class="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-white hover:bg-indigo-700">
                         Continue
                     </button>
                 </div>
@@ -434,14 +280,44 @@
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-gray-900">Schedule</h3>
 
+                    {{-- Recurring toggle + summary --}}
+                    <div class="mt-3 space-y-3">
+                        <label class="inline-flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                name="is_recurring"
+                                value="1"
+                                class="rounded border-gray-300 text-indigo-600"
+                                {{ old('is_recurring', $event->is_recurring) ? 'checked' : '' }}>
+                            <span class="text-sm text-gray-700">This is a recurring event</span>
+                        </label>
+
+                        <div>
+                            <label class="block text-sm text-gray-700 mb-1">Recurrence pattern (optional)</label>
+                            <input
+                                type="text"
+                                name="recurrence_summary"
+                                value="{{ old('recurrence_summary', $event->recurrence_summary) }}"
+                                class="w-full rounded-lg border-gray-300"
+                                placeholder="e.g., Every 1st Saturday of every month">
+                            <p class="text-xs text-gray-500 mt-1">
+                                This is only for display. Add actual dates/times below as sessions.
+                            </p>
+                        </div>
+                    </div>
+
+                    {{-- Sessions --}}
                     <div id="sessions-wrapper" class="mt-4 space-y-4">
                         @if ($existingCount > 0)
                             @foreach ($existingSessions as $i => $s)
                                 @php $date = \Carbon\Carbon::parse($s->session_date); @endphp
                                 <div class="session-item rounded-lg border border-gray-200 bg-gray-50 p-4">
+
                                     <div class="flex items-center justify-between mb-3">
                                         <h4 class="text-sm font-medium text-gray-700">Session {{ $i + 1 }}</h4>
-                                        <button type="button" class="remove-session text-sm text-rose-600 hover:text-rose-700">Remove</button>
+                                        <button type="button" class="remove-session text-sm text-rose-600 hover:text-rose-700">
+                                            Remove
+                                        </button>
                                     </div>
 
                                     <input type="hidden" name="sessions[{{ $i }}][id]" value="{{ $s->id }}">
@@ -450,26 +326,36 @@
                                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                         <div>
                                             <label class="block text-sm text-gray-700 mb-1">Title</label>
-                                            <input type="text" name="sessions[{{ $i }}][name]"
-                                                   value="{{ old('sessions.'.$i.'.name', $s->session_name) }}"
-                                                   class="w-full rounded-lg border-gray-300" required>
+                                            <input type="text"
+                                                name="sessions[{{ $i }}][name]"
+                                                value="{{ old('sessions.'.$i.'.name', $s->session_name) }}"
+                                                class="w-full rounded-lg border-gray-300"
+                                                required>
                                         </div>
+
                                         <div>
                                             <label class="block text-sm text-gray-700 mb-1">Date</label>
-                                            <input type="date" name="sessions[{{ $i }}][date]"
-                                                   value="{{ old('sessions.'.$i.'.date', $date->format('Y-m-d')) }}"
-                                                   class="w-full rounded-lg border-gray-300" required>
+                                            <input type="date"
+                                                name="sessions[{{ $i }}][date]"
+                                                value="{{ old('sessions.'.$i.'.date', $date->format('Y-m-d')) }}"
+                                                class="w-full rounded-lg border-gray-300"
+                                                required>
                                         </div>
+
                                         <div>
                                             <label class="block text-sm text-gray-700 mb-1">Start time</label>
-                                            <input type="time" name="sessions[{{ $i }}][time]"
-                                                   value="{{ old('sessions.'.$i.'.time', $date->format('H:i')) }}"
-                                                   class="w-full rounded-lg border-gray-300" required>
+                                            <input type="time"
+                                                name="sessions[{{ $i }}][time]"
+                                                value="{{ old('sessions.'.$i.'.time', $date->format('H:i')) }}"
+                                                class="w-full rounded-lg border-gray-300"
+                                                required>
                                         </div>
                                     </div>
+
                                 </div>
                             @endforeach
                         @else
+                            {{-- No sessions yet --}}
                             <div class="session-item rounded-lg border border-gray-200 bg-gray-50 p-4">
                                 <div class="flex items-center justify-between mb-3">
                                     <h4 class="text-sm font-medium text-gray-700">Session 1</h4>
@@ -494,13 +380,14 @@
                         @endif
                     </div>
 
+                    {{-- Add session button --}}
                     <button type="button" id="add-session"
                             class="mt-3 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700">
                         + Add another session
                     </button>
                 </div>
 
-                {{-- Media --}}
+                {{-- MEDIA --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-gray-900">Media</h3>
 
@@ -539,6 +426,7 @@
                     </button>
                 </div>
             </section>
+
         </form>
     </div>
 
@@ -547,7 +435,7 @@
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 
     <script>
-        // Alpine state for the edit flow (no legacy ticket cost anywhere)
+        // Alpine state for the edit flow
         document.addEventListener('alpine:init', () => {
             Alpine.data('editEvent', (cfg) => ({
                 step: 1,
@@ -659,13 +547,14 @@
             renumber();
         })();
 
-        // Ticket types UI add/remove
+        // Ticket types UI add/remove (for when you *do* show pricing on edit; harmless otherwise)
         (function () {
             const wrap = document.getElementById('cat-rows');
             const tpl  = document.getElementById('cat-tpl')?.innerHTML || '';
             const add  = document.getElementById('add-cat');
 
-            // Find next numeric index by scanning existing inputs
+            if (!wrap || !tpl || !add) return;
+
             function nextIndex() {
                 let max = -1;
                 wrap.querySelectorAll('input[name^="categories["]').forEach(inp => {
@@ -681,9 +570,8 @@
                 });
             }
 
-            add?.addEventListener('click', () => {
+            add.addEventListener('click', () => {
                 const idx = nextIndex();
-                // Replace the token with a real categories[...] prefix
                 const html = tpl.replaceAll('__IDX__', `categories[${idx}]`);
                 const div = document.createElement('div');
                 div.innerHTML = html.trim();
@@ -725,66 +613,48 @@
     @endif
 
     {{-- Quill assets --}}
-<link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
 
-<style>
-#desc-editor .ql-editor {
-    min-height: 160px;
-    max-height: 400px;
-    padding: 0.75rem 1rem;
-    font-size: 0.95rem;
-    color: #111827; /* text-gray-900 */
-}
-#desc-editor .ql-editor.ql-blank::before {
-    color: #9ca3af; /* text-gray-400 */
-    font-style: italic;
-    content: attr(data-placeholder);
-}
-</style>
+    <style>
+        #desc-editor .ql-editor {
+            min-height: 160px;
+            max-height: 400px;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            color: #111827; /* text-gray-900 */
+        }
+        #desc-editor .ql-editor.ql-blank::before {
+            color: #9ca3af; /* text-gray-400 */
+            font-style: italic;
+            content: attr(data-placeholder);
+        }
+    </style>
 
-<script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
 
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const toolbar = document.getElementById('desc-toolbar');
-    const editor = document.getElementById('desc-editor');
-    const hidden = document.getElementById('desc-html');
-    if (!toolbar || !editor || !hidden) return;
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const toolbar = document.getElementById('desc-toolbar');
+            const editor = document.getElementById('desc-editor');
+            const hidden = document.getElementById('desc-html');
+            if (!toolbar || !editor || !hidden) return;
 
-    const quill = new Quill(editor, {
-        theme: 'snow',
-        placeholder: 'Tell people what to expect',
-        modules: { toolbar: toolbar },
-    });
+            const quill = new Quill(editor, {
+                theme: 'snow',
+                placeholder: 'Tell people what to expect',
+                modules: { toolbar: toolbar },
+            });
 
-    // Prefill existing HTML content
-    const existing = hidden.value || '';
-    if (existing.trim() !== '') {
-        quill.clipboard.dangerouslyPasteHTML(existing);
-    }
+            // Prefill existing HTML content
+            const existing = hidden.value || '';
+            if (existing.trim() !== '') {
+                quill.clipboard.dangerouslyPasteHTML(existing);
+            }
 
-    // Sync to hidden field on change
-    quill.on('text-change', function () {
-        hidden.value = quill.root.innerHTML.trim();
-    });
-});
-</script>
-
-<style>
-#desc-editor .ql-editor {
-    min-height: 160px;
-    max-height: 400px;
-    padding: 0.75rem 1rem;
-    font-size: 0.95rem;
-    color: #111827; /* text-gray-900 */
-}
-
-#desc-editor .ql-editor.ql-blank::before {
-    color: #9ca3af; /* text-gray-400 */
-    font-style: italic;
-    content: attr(data-placeholder);
-}
-</style>
-
-
+            // Sync to hidden field on change
+            quill.on('text-change', function () {
+                hidden.value = quill.root.innerHTML.trim();
+            });
+        });
+    </script>
 </x-app-layout>

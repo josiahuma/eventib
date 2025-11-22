@@ -1,5 +1,5 @@
 <x-app-layout>
-    @php
+        @php
         // Choose OG image
         $ogImage = $event->banner_url
             ? asset('storage/' . $event->banner_url)
@@ -56,10 +56,20 @@
 
         $hasUpcoming = !is_null($firstUpcoming);
 
+        // All upcoming sessions (for chips like Meetup)
+        $upcomingSessions = $sortedSessions->filter(function($s) {
+            return \Carbon\Carbon::parse($s->session_date)->isFuture();
+        })->values();
+
+        // NEW: counts for collapsible header
+        $totalSessions   = $event->sessions->count();
+        $upcomingCount   = $upcomingSessions->count();
+
         $manageUrl = auth()->check()
             ? route('my.tickets')
             : route('events.ticket.find', $event);
     @endphp
+
 
     @section('title', $ogTitle)
 
@@ -118,6 +128,32 @@
                 <div>
                     <h1 class="text-3xl md:text-4xl font-bold text-gray-900">{{ $event->name }}</h1>
 
+                    {{-- Primary next date + recurring badge --}}
+                    @if($nextFuture)
+                        <div class="mt-3 flex flex-wrap items-center gap-2">
+                            <span class="inline-flex items-center rounded-full bg-indigo-600 px-3 py-1 text-sm font-medium text-white">
+                                {{ \Carbon\Carbon::parse($nextFuture->session_date)->format('D, M j · g:ia') }}
+                            </span>
+
+                            @if($event->is_recurring)
+                                <span class="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                    {{ $event->recurrence_summary ?: 'Recurring event' }}
+                                </span>
+                            @endif
+                        </div>
+                    @endif
+
+                    {{-- Upcoming dates chips (Meetup-style) --}}
+                    @if($upcomingSessions->count() > 1)
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            @foreach($upcomingSessions as $s)
+                                <span class="inline-flex items-center rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                                    {{ \Carbon\Carbon::parse($s->session_date)->format('M j @ g:ia') }}
+                                </span>
+                            @endforeach
+                        </div>
+                    @endif
+
                     {{-- Countdown --}}
                     @if($countdownIso)
                         <div
@@ -148,31 +184,6 @@
                     </div>
                 </div>
 
-                {{-- Sessions --}}
-                <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-                    <h2 class="text-lg font-semibold text-gray-900">Dates & Sessions</h2>
-                    @if ($event->sessions->count())
-                        <ul class="mt-3 divide-y divide-gray-100">
-                            @foreach ($event->sessions as $s)
-                                <li class="py-3 flex items-center justify-between">
-                                    <div class="flex items-center gap-3">
-                                        <div class="flex items-center justify-center h-9 w-9 rounded-full bg-indigo-50">
-                                            <svg class="h-4 w-4 text-indigo-600" viewBox="0 0 24 24" fill="currentColor"><path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v3H3V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1z"/><path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/></svg>
-                                        </div>
-                                        <div>
-                                            <div class="text-sm font-medium text-gray-900">{{ $s->session_name }}</div>
-                                            <div class="text-sm text-gray-600">{{ \Carbon\Carbon::parse($s->session_date)->format('D, d M Y · g:ia') }}</div>
-                                        </div>
-                                    </div>
-                                    <a href="#" class="text-sm text-indigo-600 hover:text-indigo-700">Add to calendar</a>
-                                </li>
-                            @endforeach
-                        </ul>
-                    @else
-                        <p class="mt-2 text-sm text-gray-600">Schedule TBA.</p>
-                    @endif
-                </div>
-
                 {{-- Description --}}
                 @if ($event->description)
                     <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
@@ -191,6 +202,84 @@
                     </div>
                 @endif
 
+                {{-- Sessions (collapsible) --}}
+                <div x-data="{ open: false }" class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                    {{-- Header / toggle --}}
+                    <button type="button"
+                            @click="open = !open"
+                            class="flex w-full items-center justify-between gap-3 text-left">
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-lg font-semibold text-gray-900">
+                                Dates &amp; Sessions
+                            </h2>
+
+                            @if($totalSessions > 0)
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium
+                                            bg-gray-100 text-gray-700 border border-gray-200">
+                                    {{ $upcomingCount > 0 ? $upcomingCount.' upcoming' : $totalSessions.' sessions' }}
+                                </span>
+                            @else
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium
+                                            bg-amber-50 text-amber-700 border border-amber-100">
+                                    Schedule TBA
+                                </span>
+                            @endif
+                        </div>
+
+                        <svg class="h-5 w-5 text-gray-400 transition-transform duration-200"
+                             :class="open ? 'rotate-180' : 'rotate-0'"
+                             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M6 9l6 6 6-6" />
+                        </svg>
+                    </button>
+
+                    {{-- Body --}}
+                    <div x-show="open" x-cloak class="mt-4 border-t border-gray-100 pt-3">
+                        @if ($event->sessions->count())
+                            <ul class="divide-y divide-gray-100">
+                                @foreach ($event->sessions->sortBy('session_date') as $s)
+                                    <li class="py-3 flex items-center justify-between gap-3">
+                                        <div class="flex items-center gap-3">
+                                            <div class="flex items-center justify-center h-9 w-9 rounded-full bg-indigo-50">
+                                                <svg class="h-4 w-4 text-indigo-600" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v3H3V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1z"/>
+                                                    <path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/>
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <div class="text-sm font-medium text-gray-900">
+                                                    {{ $s->session_name }}
+                                                </div>
+                                                <div class="text-sm text-gray-600">
+                                                    {{ \Carbon\Carbon::parse($s->session_date)->format('D, d M Y · g:ia') }}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {{-- Add to calendar action (styled as subtle button) --}}
+                                        <a href="#"
+                                           class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
+                                                  rounded-full border border-indigo-100 bg-indigo-50 text-indigo-700
+                                                  hover:bg-indigo-100 hover:border-indigo-200">
+                                            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v3H3V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1z"/>
+                                                <path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/>
+                                            </svg>
+                                            <span>Add to calendar</span>
+                                        </a>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @else
+                            <p class="text-sm text-gray-600">
+                                Dates and session details will be announced soon.
+                            </p>
+                        @endif
+                    </div>
+                </div>
+
+
                 {{-- Tags --}}
                 @if (!empty($tags))
                     <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
@@ -206,7 +295,7 @@
 
             {{-- Right column (sticky floating ticket card) --}}
             <div class="lg:col-span-1 space-y-6">
-                <div class="lg:sticky lg:top-6 z-20">
+                <div class="lg:sticky lg:top-6 z-20 space-y-6">
 
                 {{-- Ticket card --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
@@ -309,9 +398,6 @@
                         </button>
                     </div>
                 </div>
-
-
-
 
                 {{-- Organizer card --}}
                 <x-organizer-card :organizer="$event->organizer" />

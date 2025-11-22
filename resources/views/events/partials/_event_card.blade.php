@@ -1,16 +1,21 @@
 @php
+    use Illuminate\Support\Carbon;
+
     $image = $event->banner_url
         ? asset('storage/' . $event->banner_url)
         : ($event->avatar_url ? asset('storage/' . $event->avatar_url) : null);
 
     $activeCats = collect($event->categories ?? []);
-    $paidPrices = $activeCats->pluck('price')->map(fn($p)=>(float)$p)->filter(fn($p)=>$p>0);
+    $paidPrices = $activeCats->pluck('price')->map(fn($p) => (float) $p)->filter(fn($p) => $p > 0);
     $isFree     = $paidPrices->isEmpty();
     $min        = $paidPrices->min();
     $max        = $paidPrices->max();
 
     $cur = strtoupper($event->ticket_currency ?? 'GBP');
-    $symbols = ['GBP'=>'£','USD'=>'$','EUR'=>'€','NGN'=>'₦','KES'=>'KSh','GHS'=>'₵','ZAR'=>'R','CAD'=>'$','AUD'=>'$','NZD'=>'$','INR'=>'₹','JPY'=>'¥','CNY'=>'¥'];
+    $symbols = [
+        'GBP'=>'£','USD'=>'$','EUR'=>'€','NGN'=>'₦','KES'=>'KSh','GHS'=>'₵','ZAR'=>'R',
+        'CAD'=>'$','AUD'=>'$','NZD'=>'$','INR'=>'₹','JPY'=>'¥','CNY'=>'¥'
+    ];
     $sym = $symbols[$cur] ?? '';
 
     $priceLabel = $isFree
@@ -19,7 +24,22 @@
             ? (($sym ?: $cur.' ') . number_format($min, 2))
             : (($sym ?: $cur.' ') . number_format($min, 2) . '–' . ($sym ?: $cur.' ') . number_format($max, 2)));
 
-    $nextDate = $event->sessions_min_session_date ?? null;
+    // -------- NEW: pick the next upcoming session date --------
+    $sessions = $event->sessions ?? collect();
+    $now      = Carbon::now();
+
+    // earliest session that is now or in the future
+    $nextSession = $sessions
+        ->filter(fn ($s) => $s->session_date && Carbon::parse($s->session_date)->gte($now))
+        ->sortBy('session_date')
+        ->first();
+
+    // if no future sessions, fall back to the latest past one
+    if (! $nextSession && $sessions->isNotEmpty()) {
+        $nextSession = $sessions->sortByDesc('session_date')->first();
+    }
+
+    $nextDate = $nextSession ? Carbon::parse($nextSession->session_date) : null;
 @endphp
 
 <a href="{{ route('events.show', $event) }}"
@@ -78,7 +98,7 @@
                     <path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/>
                 </svg>
                 @if ($nextDate)
-                    <span>{{ \Carbon\Carbon::parse($nextDate)->format('D, d M Y · g:ia') }}</span>
+                    <span>{{ $nextDate->format('D, d M Y · g:ia') }}</span>
                 @else
                     <span>No sessions yet</span>
                 @endif

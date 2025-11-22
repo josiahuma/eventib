@@ -4,7 +4,9 @@
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">Dashboard</h2>
             <a href="{{ route('events.create') }}"
                class="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/>
+                </svg>
                 Create Event
             </a>
         </div>
@@ -25,7 +27,25 @@
                             ? asset('storage/' . $event->banner_url)
                             : ($event->avatar_url ? asset('storage/' . $event->avatar_url) : null);
 
-                        $nextDate = $event->sessions_min_session_date ?? null;
+                        // --- NEW: compute the next upcoming session date ---
+                        $sessions = $event->sessions ?? collect();
+                        $now      = \Illuminate\Support\Carbon::now();
+
+                        // earliest session that is now or in the future
+                        $nextSession = $sessions
+                            ->filter(fn ($s) => $s->session_date && \Illuminate\Support\Carbon::parse($s->session_date)->gte($now))
+                            ->sortBy('session_date')
+                            ->first();
+
+                        // if no future sessions, fall back to the latest past one
+                        if (! $nextSession && $sessions->isNotEmpty()) {
+                            $nextSession = $sessions->sortByDesc('session_date')->first();
+                        }
+
+                        $nextDate = $nextSession
+                            ? \Illuminate\Support\Carbon::parse($nextSession->session_date)
+                            : null;
+                        // --- end next-date logic ---
 
                         $raw = $event->tags;
                         $tags = [];
@@ -82,12 +102,11 @@
                                     $priceLabel = ($min === $max) ? $fmt($min) : ($fmt($min) . '–' . $fmt($max));
                                 } elseif ($isPaidSingle) {
                                     $priceLabel = $sym ? $sym . number_format($event->ticket_cost, 2)
-                                                    : $cur . ' ' . number_format($event->ticket_cost, 2);
+                                                       : $cur . ' ' . number_format($event->ticket_cost, 2);
                                 } else {
                                     $priceLabel = 'Free';
                                 }
                             @endphp
-
 
                             <span class="absolute top-3 right-3 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold
                                 {{ $isFree ? 'bg-emerald-500 text-white' : 'bg-black/80 text-white' }}">
@@ -123,14 +142,12 @@
                                         }
                                     @endphp
 
-
                                     <div class="text-xs text-gray-500">Registrations</div>
                                     <div class="text-sm font-semibold text-gray-900">
                                         {{ number_format($totalUnits) }}
                                         <span class="text-xs text-gray-500">({{ $unitLabel }})</span>
                                     </div>
                                 </div>
-
                             </div>
 
                             @if ($event->location)
@@ -148,7 +165,7 @@
                                     <path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/>
                                 </svg>
                                 @if ($nextDate)
-                                    <span>Next: {{ \Carbon\Carbon::parse($nextDate)->format('D, d M Y · g:ia') }}</span>
+                                    <span>Next: {{ $nextDate->format('D, d M Y · g:ia') }}</span>
                                 @else
                                     <span>No sessions yet</span>
                                 @endif
@@ -163,8 +180,7 @@
                             @endif
 
                             <div class="mt-4 flex items-center justify-between">
-                                 <div class="flex items-center gap-2">
-                                    {{-- CHANGED: use implicit binding so URL uses public_id --}}
+                                <div class="flex items-center gap-2">
                                     <a href="{{ route('events.show', $event) }}"
                                        class="inline-flex items-center px-3 py-1.5 text-sm rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800">
                                         View
@@ -175,9 +191,8 @@
                                     </a>
                                 </div>
 
-                                {{-- View registrants / Unlock --}}
                                 @php
-                                    $isFree = ($event->ticket_cost ?? 0) == 0;
+                                    $isFreeSimple = ($event->ticket_cost ?? 0) == 0;
                                     $cur = strtoupper($event->ticket_currency ?? 'GBP');
                                     $symbols = [
                                         'GBP' => '£','USD' => '$','EUR' => '€','NGN' => '₦','KES' => 'KSh',
@@ -185,73 +200,73 @@
                                         'INR' => '₹','JPY' => '¥','CNY' => '¥'
                                     ];
                                     $sym = $symbols[$cur] ?? '';
-                                    $priceLabel = $isFree
+                                    $priceLabelSimple = $isFreeSimple
                                         ? 'Free'
                                         : ($sym ? $sym.number_format($event->ticket_cost, 2) : $cur.' '.number_format($event->ticket_cost, 2));
                                     $isUnlocked = optional($event->unlocks->first())->unlocked_at !== null;
                                 @endphp
 
-                                @if(!$isFree || $isUnlocked)
+                                @if(!$isFreeSimple || $isUnlocked)
                                     <a href="{{ route('events.registrants', $event) }}"
                                        class="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700">
-                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a5 5 0 00-5 5v2H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7a5 5 0 00-5-5zm-3 7V7a3 3 0 016 0v2H9z"/></svg>
+                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 2a5 5 0 00-5 5v2H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7a5 5 0 00-5-5zm-3 7V7a3 3 0 0 1 6 0v2H9z"/>
+                                        </svg>
                                         View registrants
                                     </a>
                                 @else
                                     <a href="{{ route('events.registrants.unlock', $event) }}"
                                        class="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200">
-                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a4 4 0 00-4 4v2H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-1V6a4 4 0 00-8 0v2h2V6a2 2 0 114 0v2h-4z"/></svg>
+                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 2a4 4 0 00-4 4v2H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-1V6a4 4 0 00-8 0v2h2V6a2 2 0 1 1 4 0v2h-4z"/>
+                                        </svg>
                                         View registrants
                                     </a>
                                 @endif
-                                
+
                                 {{-- Delete button with confirmation modal --}}
                                 <div x-data="{ open: false }">
-                                <button @click="open = true"
-                                        class="inline-flex items-center px-3 py-1.5 text-sm rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700">
-                                    Delete
-                                </button>
+                                    <button @click="open = true"
+                                            class="inline-flex items-center px-3 py-1.5 text-sm rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700">
+                                        Delete
+                                    </button>
 
-                                <!-- Move the modal to <body> so overflow on cards never clips it -->
-                                <template x-teleport="body">
-                                    <div x-show="open" x-transition.opacity x-trap.noscroll="open"
-                                        class="fixed inset-0 z-50">
-                                    <!-- Backdrop -->
-                                    <div class="absolute inset-0 bg-black/40" @click="open = false" aria-hidden="true"></div>
+                                    <template x-teleport="body">
+                                        <div x-show="open" x-transition.opacity x-trap.noscroll="open"
+                                             class="fixed inset-0 z-50">
+                                            <div class="absolute inset-0 bg-black/40" @click="open = false" aria-hidden="true"></div>
 
-                                    <!-- Modal -->
-                                    <div class="absolute inset-0 flex items-center justify-center p-4">
-                                        <div class="w-full max-w-md rounded-xl bg-white shadow-xl p-6"
-                                            role="dialog" aria-modal="true" aria-labelledby="delTitle">
-                                        <h3 id="delTitle" class="text-base font-semibold text-gray-900">
-                                            Delete this event?
-                                        </h3>
-                                        <p class="mt-2 text-sm text-gray-600">
-                                            This action cannot be undone.
-                                        </p>
+                                            <div class="absolute inset-0 flex items-center justify-center p-4">
+                                                <div class="w-full max-w-md rounded-xl bg-white shadow-xl p-6"
+                                                     role="dialog" aria-modal="true" aria-labelledby="delTitle">
+                                                    <h3 id="delTitle" class="text-base font-semibold text-gray-900">
+                                                        Delete this event?
+                                                    </h3>
+                                                    <p class="mt-2 text-sm text-gray-600">
+                                                        This action cannot be undone.
+                                                    </p>
 
-                                        <div class="mt-6 flex justify-end gap-3">
-                                            <button type="button"
-                                                    @click="open = false"
-                                                    class="px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
-                                            Cancel
-                                            </button>
+                                                    <div class="mt-6 flex justify-end gap-3">
+                                                        <button type="button"
+                                                                @click="open = false"
+                                                                class="px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
+                                                            Cancel
+                                                        </button>
 
-                                            <form method="POST" action="{{ route('events.destroy', $event) }}">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit"
-                                                    class="px-3 py-1.5 text-sm rounded-md bg-rose-600 text-white hover:bg-rose-700">
-                                                Yes, delete
-                                            </button>
-                                            </form>
+                                                        <form method="POST" action="{{ route('events.destroy', $event) }}">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="submit"
+                                                                    class="px-3 py-1.5 text-sm rounded-md bg-rose-600 text-white hover:bg-rose-700">
+                                                                Yes, delete
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        </div>
-                                    </div>
-                                    </div>
-                                </template>
+                                    </template>
                                 </div>
-
                             </div>
 
                         </div>

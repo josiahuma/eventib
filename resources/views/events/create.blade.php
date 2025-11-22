@@ -55,7 +55,6 @@
                  class="rounded-xl px-4 py-3 text-center text-sm font-medium">3) Schedule & media</div>
         </div>
 
-        {{-- NOTE: pass $event to the handler so we can submit safely --}}
         <form id="create-event-form" action="{{ route('events.store') }}" method="POST" enctype="multipart/form-data" @submit.prevent="validateAndSubmit()">
             @csrf
 
@@ -250,7 +249,6 @@
                     </div>
                 </div>
 
-
                 {{-- Payout destination (paid only) --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm" x-show="pricing==='paid'">
                     <h3 class="text-lg font-semibold text-gray-900">Payout destination</h3>
@@ -340,27 +338,27 @@
                             <div class="border border-gray-300 rounded-lg overflow-hidden">
                                 {{-- Quill toolbar --}}
                                 <div id="desc-toolbar" class="border-b bg-gray-50 px-2 py-1 text-sm">
-                                <span class="ql-formats">
-                                    <button class="ql-bold"></button>
-                                    <button class="ql-italic"></button>
-                                    <button class="ql-underline"></button>
-                                </span>
-                                <span class="ql-formats">
-                                    <button class="ql-list" value="ordered"></button>
-                                    <button class="ql-list" value="bullet"></button>
-                                </span>
-                                <span class="ql-formats">
-                                    <select class="ql-header">
-                                        <option selected></option>
-                                        <option value="2"></option>
-                                        <option value="3"></option>
-                                    </select>
-                                    <button class="ql-link"></button>
-                                    <button class="ql-blockquote"></button>
-                                </span>
-                            </div>
+                                    <span class="ql-formats">
+                                        <button class="ql-bold"></button>
+                                        <button class="ql-italic"></button>
+                                        <button class="ql-underline"></button>
+                                    </span>
+                                    <span class="ql-formats">
+                                        <button class="ql-list" value="ordered"></button>
+                                        <button class="ql-list" value="bullet"></button>
+                                    </span>
+                                    <span class="ql-formats">
+                                        <select class="ql-header">
+                                            <option selected></option>
+                                            <option value="2"></option>
+                                            <option value="3"></option>
+                                        </select>
+                                        <button class="ql-link"></button>
+                                        <button class="ql-blockquote"></button>
+                                    </span>
+                                </div>
 
-                             {{-- Quill editor --}}
+                                {{-- Quill editor --}}
                                 <div id="desc-editor" class="min-h-[180px] bg-white overflow-y-auto"></div>
                             </div>
 
@@ -385,7 +383,37 @@
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-gray-900">Schedule</h3>
 
+                    {{-- Recurring controls --}}
+                    <div class="mt-3 space-y-3">
+                        <label class="inline-flex items-center gap-2">
+                            <input type="checkbox"
+                                   name="is_recurring"
+                                   value="1"
+                                   class="rounded border-gray-300 text-indigo-600"
+                                   {{ old('is_recurring') ? 'checked' : '' }}>
+                            <span class="text-sm text-gray-700">
+                                This is a recurring event
+                            </span>
+                        </label>
+
+                        <div>
+                            <label class="block text-gray-700 mb-1">
+                                Recurrence pattern (optional)
+                            </label>
+                            <input type="text"
+                                   name="recurrence_summary"
+                                   value="{{ old('recurrence_summary') }}"
+                                   class="w-full rounded-lg border-gray-300"
+                                   placeholder="e.g., Every 1st Wednesday of the month until January 2027">
+                            <p class="text-xs text-gray-500 mt-1">
+                                This is for display only. Add each actual date/time below as a session.
+                            </p>
+                        </div>
+                    </div>
+
+                    {{-- Sessions wrapper (used by JS) --}}
                     <div id="sessions-wrapper" class="mt-4 space-y-4">
+                        <h5 class="text-gray-700 mt-1">You can add up to 6 upcoming sessions below.</h5>
                         <div class="session-item rounded-lg border border-gray-200 bg-gray-50 p-4">
                             <div class="flex items-center justify-between mb-3">
                                 <h4 class="text-sm font-medium text-gray-700">Session 1</h4>
@@ -468,7 +496,6 @@
                     });
                 },
 
-
                 mapCurrencyToCountry(c) {
                     c = String(c || '').toUpperCase();
                     const map = { GBP:'GB', USD:'US', CAD:'CA', AUD:'AU', INR:'IN', NGN:'NG', KES:'KE', GHS:'GH', EUR:'EU' };
@@ -508,7 +535,6 @@
                         document.getElementById('desc-html').value = window._quillDesc.root.innerHTML.trim();
                     }
 
-                    // ✅ now submit the form normally
                     document.getElementById('create-event-form').submit();
                 }
 
@@ -520,6 +546,8 @@
             let sessionIndex = 1;
             const wrapper = document.getElementById('sessions-wrapper');
             const addBtn  = document.getElementById('add-session');
+
+            if (!wrapper || !addBtn) return;
 
             function renumber() {
                 const items = wrapper.querySelectorAll('.session-item');
@@ -548,7 +576,8 @@
 
             document.addEventListener('click', (e) => {
                 const btn = e.target.closest('.remove-session');
-                if (!btn) return; btn.closest('.session-item').remove(); renumber();
+                if (!btn || !wrapper.contains(btn)) return;
+                btn.closest('.session-item').remove(); renumber();
             });
 
             renumber();
@@ -560,7 +589,8 @@
             const tpl  = document.getElementById('cat-tpl')?.innerHTML || '';
             const add  = document.getElementById('add-cat');
 
-            // Find next numeric index by scanning existing inputs
+            if (!wrap || !add || !tpl) return;
+
             function nextIndex() {
                 let max = -1;
                 wrap.querySelectorAll('input[name^="categories["]').forEach(inp => {
@@ -576,9 +606,8 @@
                 });
             }
 
-            add?.addEventListener('click', () => {
+            add.addEventListener('click', () => {
                 const idx = nextIndex();
-                // Replace the token with a real categories[...] prefix
                 const html = tpl.replaceAll('__IDX__', `categories[${idx}]`);
                 const div = document.createElement('div');
                 div.innerHTML = html.trim();
@@ -648,28 +677,26 @@
             return q;
         };
     </script>
+
     <style>
-    /* Quill editor clean layout fix */
-    #desc-editor .ql-editor {
-        min-height: 160px;
-        max-height: 400px;
-        padding: 0.75rem 1rem;
-        font-size: 0.95rem;
-        color: #111827; /* text-gray-900 */
-    }
+        /* Quill editor clean layout fix */
+        #desc-editor .ql-editor {
+            min-height: 160px;
+            max-height: 400px;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            color: #111827; /* text-gray-900 */
+        }
 
-    #desc-editor .ql-editor.ql-blank::before {
-        color: #9ca3af; /* text-gray-400 */
-        font-style: italic;
-        content: attr(data-placeholder);
-    }
+        #desc-editor .ql-editor.ql-blank::before {
+            color: #9ca3af; /* text-gray-400 */
+            font-style: italic;
+            content: attr(data-placeholder);
+        }
 
-    #desc-toolbar .ql-formats button svg {
-        width: 16px;
-        height: 16px;
-    }
-</style>
-
-
-
+        #desc-toolbar .ql-formats button svg {
+            width: 16px;
+            height: 16px;
+        }
+    </style>
 </x-app-layout>

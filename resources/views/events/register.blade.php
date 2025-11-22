@@ -26,6 +26,12 @@
             : ($event->avatar_url ? asset('storage/' . $event->avatar_url) : null);
 
         $mode = $hasCats ? 'cats' : ($unit > 0 ? 'single' : 'free');
+
+        // 🔹 Only upcoming sessions (hide past ones)
+        $upcomingSessions = $event->sessions
+        ->filter(fn($s) => \Carbon\Carbon::parse($s->session_date)->isFuture())
+        ->sortBy('session_date')
+        ->values();
     @endphp
 
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -120,11 +126,11 @@
                 <div class="mt-6">
                     <label class="block text-sm font-medium text-gray-700">Select session(s)</label>
                     <div class="mt-2 space-y-2">
-                        @forelse ($event->sessions as $s)
+                        @forelse ($upcomingSessions as $s)
                             <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50">
                                 <input type="checkbox" name="session_ids[]" value="{{ $s->id }}"
-                                       class="h-4 w-4 rounded border-gray-300"
-                                       @checked(in_array($s->id, old('session_ids', [])))>
+                                    class="h-4 w-4 rounded border-gray-300"
+                                    @checked(in_array($s->id, old('session_ids', [])))>
                                 <div>
                                     <div class="text-sm font-medium text-gray-900">{{ $s->session_name }}</div>
                                     <div class="text-sm text-gray-600">
@@ -133,11 +139,14 @@
                                 </div>
                             </label>
                         @empty
-                            <p class="text-sm text-gray-600">No sessions yet.</p>
+                            <p class="text-sm text-gray-600">
+                                There are no upcoming sessions available to register for.
+                            </p>
                         @endforelse
                     </div>
                     @error('session_ids') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
+
 
                 {{-- Categories mode --}}
                 @if($hasCats)

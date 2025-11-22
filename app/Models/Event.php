@@ -16,6 +16,7 @@ class Event extends Model
         'avatar_url','banner_url','ticket_cost','is_promoted','public_id',
         'ticket_currency','payout_method_id', 'is_disabled',
         'fee_mode', 'fee_bps',
+        'is_recurring', 'recurrence_summary',
     ];
 
     protected $casts = [
@@ -24,6 +25,7 @@ class Event extends Model
         'ticket_cost' => 'decimal:2',
         'is_disabled' => 'boolean',
         'fee_bps'     => 'integer',
+        'is_recurring'=> 'boolean',
     ];
 
     public function getCurrencySymbolAttribute(): string
@@ -112,6 +114,38 @@ class Event extends Model
             ->whereIn('status', ['paid', 'free']);
     }
 
+    /** Next upcoming session (or null) */
+    public function nextUpcomingSession()
+    {
+        return $this->sessions()
+            ->where('session_date', '>=', now())
+            ->orderBy('session_date', 'asc')
+            ->first();
+    }
+
+    /** All upcoming sessions ordered soonest → latest */
+    public function upcomingSessions()
+    {
+        return $this->sessions()
+            ->where('session_date', '>=', now())
+            ->orderBy('session_date', 'asc');
+    }
+
+    /** Nice label for recurring badge */
+    public function getRecurrenceLabelAttribute(): ?string
+    {
+        if (! $this->is_recurring) {
+            return null;
+        }
+
+        // Prefer the custom summary if present
+        if ($this->recurrence_summary) {
+            return $this->recurrence_summary;
+        }
+
+        return 'Recurring event';
+    }
+
     // Convenience: money actually received (paid only)
     public function paidAmount()
     {
@@ -122,6 +156,8 @@ class Event extends Model
     {
         return $this->belongsTo(Organizer::class);
     }
+
+
 
 
 }

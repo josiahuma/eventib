@@ -85,17 +85,6 @@
             </a>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <a href="{{ route('admin.payouts.index') }}"
-               class="group bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition">
-                <div class="flex items-center gap-3">
-                    <svg class="h-8 w-8 text-emerald-600" viewBox="0 0 24 24" fill="currentColor"><path d="M4.5 6.75A2.25 2.25 0 016.75 4.5h10.5A2.25 2.25 0 0119.5 6.75v10.5A2.25 2.25 0 0117.25 19.5H6.75A2.25 2.25 0 014.5 17.25V6.75zM7.5 8.25a.75.75 0 000 1.5h9a.75.75 0 000-1.5h-9zM7.5 12a.75.75 0 000 1.5h5.25a.75.75 0 000-1.5H7.5z"/></svg>
-                    <div>
-                        <div class="text-lg font-semibold">Manage payouts</div>
-                        <div class="text-sm text-gray-500">Approve / mark paid / fail</div>
-                    </div>
-                </div>
-            </a>
-
             <a href="{{ route('admin.homepage-sponsors.index') }}"
                class="group bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition">
                 <div class="flex items-center gap-3">

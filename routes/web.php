@@ -24,6 +24,7 @@ use App\Http\Controllers\CheckinsController;
 use App\Http\Controllers\Admin\HomepageSlideController; // <-- add this
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OrganizerController;
+use App\Http\Controllers\Admin\HomepageSponsorController;
 
 /*
 |--------------------------------------------------------------------------
@@ -85,6 +86,7 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/slides/{slide}/edit',   [HomepageSlideController::class, 'edit'])->name('slides.edit');
     Route::put('/slides/{slide}',        [HomepageSlideController::class, 'update'])->name('slides.update');
     Route::delete('/slides/{slide}',     [HomepageSlideController::class, 'destroy'])->name('slides.destroy');
+    Route::resource('homepage-sponsors', HomepageSponsorController::class)->except(['show']);
 
     // Payouts
     Route::get('/payouts', [PayoutAdminController::class, 'index'])->name('payouts.index');

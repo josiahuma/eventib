@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Mail;
 use App\Mail\EventCreatedMail;
 use Illuminate\Validation\Rule;
 use App\Mail\OrganizerNewEventMail;
+use App\Models\HomepageSponsor;
+use App\Models\HomepageSlide;
 
 
 class EventController extends Controller
@@ -24,15 +26,16 @@ class EventController extends Controller
 
     public function publicIndex(Request $request)
     {
-        $q    = trim($request->query('q', ''));
-        $loc  = trim($request->query('loc', ''));
-        $now  = Carbon::now();
+        $q   = trim($request->query('q', ''));
+        $loc = trim($request->query('loc', ''));
+        $now = Carbon::now();
 
+        // ------- Base event query -------
         $base = Event::query()
             ->where('is_disabled', false)
             ->with([
-                'sessions'   => fn($q) => $q->orderBy('session_date', 'asc'),
-                'categories' => fn($q) => $q->where('is_active', true)->orderBy('sort')->orderBy('id'),
+                'sessions'   => fn ($q) => $q->orderBy('session_date', 'asc'),
+                'categories' => fn ($q) => $q->where('is_active', true)->orderBy('sort')->orderBy('id'),
             ])
             ->withMin('sessions', 'session_date')
             ->withMax('sessions', 'session_date');
@@ -44,18 +47,18 @@ class EventController extends Controller
                 ->orWhere('description', 'like', $like)
                 ->orWhere('tags', 'like', $like)
                 ->orWhere('location', 'like', $like)
-                ->orWhereHas('organizer', fn($oq) => $oq->where('name', 'like', $like));
+                ->orWhereHas('organizer', fn ($oq) => $oq->where('name', 'like', $like));
             });
         }
-
 
         if ($loc !== '') {
             $base->where('location', 'like', '%' . $loc . '%');
         }
 
+        // ------- Featured / upcoming / past -------
         $featuredIds = (clone $base)
             ->where('is_promoted', true)
-            ->whereHas('sessions', fn($q) => $q->where('session_date', '>=', $now))
+            ->whereHas('sessions', fn ($q) => $q->where('session_date', '>=', $now))
             ->pluck('id');
 
         $featured = (clone $base)
@@ -64,21 +67,48 @@ class EventController extends Controller
             ->paginate(8, ['*'], 'featured_page');
 
         $upcoming = (clone $base)
-            ->whereHas('sessions', fn($q) => $q->where('session_date', '>=', $now))
-            ->when($featuredIds->isNotEmpty(), fn($q) => $q->whereNotIn('id', $featuredIds))
+            ->whereHas('sessions', fn ($q) => $q->where('session_date', '>=', $now))
+            ->when($featuredIds->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $featuredIds))
             ->orderBy('sessions_min_session_date', 'asc')
             ->paginate(12, ['*'], 'upcoming_page');
 
         $past = (clone $base)
-            ->whereDoesntHave('sessions', fn($q) => $q->where('session_date', '>=', $now))
-            ->whereHas('sessions', fn($q) => $q->where('session_date', '<', $now))
+            ->whereDoesntHave('sessions', fn ($q) => $q->where('session_date', '>=', $now))
+            ->whereHas('sessions', fn ($q) => $q->where('session_date', '<', $now))
             ->orderBy('sessions_max_session_date', 'desc')
             ->paginate(12, ['*'], 'past_page');
 
-        $slides = \App\Models\HomepageSlide::active()->orderBy('sort')->orderBy('id')->get();
+        $slides = HomepageSlide::active()
+            ->orderBy('sort')
+            ->orderBy('id')
+            ->get();
 
-        return view('events.public-index', compact('featured','upcoming','past','q','loc','slides'));
+        // ------- Sponsor skin (dynamic) -------
+        $sponsorSkin = HomepageSponsor::activeForDate($now)
+            ->inRandomOrder()
+            ->first();
+
+        $sponsorBgUrl = $sponsorSkin && $sponsorSkin->background_path
+            ? asset('storage/' . $sponsorSkin->background_path)
+            : null;
+
+        $sponsorLogoUrl = $sponsorSkin && $sponsorSkin->logo_path
+            ? asset('storage/' . $sponsorSkin->logo_path)
+            : null;
+
+        return view('events.public-index', [
+            'featured'       => $featured,
+            'upcoming'       => $upcoming,
+            'past'           => $past,
+            'q'              => $q,
+            'loc'            => $loc,
+            'slides'         => $slides,
+            'sponsorSkin'    => $sponsorSkin,
+            'sponsorBgUrl'   => $sponsorBgUrl,
+            'sponsorLogoUrl' => $sponsorLogoUrl,
+        ]);
     }
+
 
     public function dashboard()
     {

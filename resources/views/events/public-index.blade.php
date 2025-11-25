@@ -106,9 +106,9 @@
                                     GET TICKETS FOR:
                                 </span>
 
-                                <span class="text-xl font-extrabold uppercase text-white">
+                                <a href="{{ $sponsorSkin->website_url }}" class="text-xl font-extrabold uppercase text-white">
                                     {{ $sponsorSkin->name }}
-                                </span>
+                                </a>
                             </div>
                         </div>
 
@@ -118,7 +118,8 @@
                             target="_blank" 
                             rel="noopener"
                             class="text-[#FFD43B] font-bold uppercase tracking-wide text-sm flex items-center gap-2 hover:text-yellow-300">
-                                Explore Experience
+                                Ends {{ $sponsorSkin->ends_on ? $sponsorSkin->ends_on->format('F j, Y') : 'TBA' }}
+                                {{-- Right arrow icon --}}
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" 
                                     viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />

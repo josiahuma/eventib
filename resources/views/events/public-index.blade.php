@@ -57,7 +57,7 @@
     <div class="relative min-h-screen">
         {{-- Desktop sponsor “skin” only on the sides, centre left alone --}}
         @if ($sponsorSkin && $sponsorBgUrl)
-            <div class="hidden lg:block fixed inset-y-0 left-0 right-0 z-0">
+            <div class="hidden 2xl:block fixed inset-y-0 left-0 right-0 z-0">
                 <div class="h-full w-full flex justify-between">
                     {{-- Left sponsor gutter (clickable) --}}
                     <a href="{{ $sponsorSkin->website_url }}"

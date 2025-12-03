@@ -521,7 +521,7 @@ class TicketController extends Controller
 
         // 3) Compare embeddings & find best match
         // NOTE: we'll start SUPER relaxed so we can see scores.
-        $threshold = 0.65;   // <-- for debugging: literally accept ANY score
+        $threshold = 0.60;   // <-- for debugging: literally accept ANY score
         $scores    = [];
         $anySnapshots = false;
 

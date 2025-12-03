@@ -48,4 +48,19 @@ class AuthController extends Controller
     {
         return response()->json($request->user());
     }
+
+    public function updateMe(Request $request)
+    {
+        $user = $request->user();
+
+        $data = $request->validate([
+            'name'   => ['required', 'string', 'max:255'],
+            'mobile' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $user->fill($data);
+        $user->save();
+
+        return response()->json($user);
+    }
 }

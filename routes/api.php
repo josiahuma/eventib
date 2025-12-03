@@ -12,6 +12,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
+    // 🔹 NEW: allow updating profile
+    Route::match(['post', 'put', 'patch'], '/me', [AuthController::class, 'updateMe']);
+
     // ✅ Note how we use {event:public_id}
     Route::get('/events', [EventApiController::class, 'index']);
     Route::get('/events/{event:public_id}', [EventApiController::class, 'show']);

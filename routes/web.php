@@ -21,10 +21,13 @@ use App\Http\Controllers\Admin\UserAdminController;
 use App\Http\Controllers\Admin\EventAdminController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\CheckinsController;
-use App\Http\Controllers\Admin\HomepageSlideController; // <-- add this
+use App\Http\Controllers\Admin\HomepageSlideController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\OrganizerController;
 use App\Http\Controllers\Admin\HomepageSponsorController;
+use App\Http\Controllers\DigitalPassController;
+
+
 
 /*
 |--------------------------------------------------------------------------
@@ -179,7 +182,58 @@ Route::middleware(['auth'])->group(function () {
     // (Optional) organiser: per-event ticket list + export
     Route::get('/events/{event}/tickets',             [TicketController::class, 'eventIndex'])->name('events.tickets.index');
     Route::get('/events/{event}/tickets/export-pdf',  [TicketController::class, 'exportPdf'])->name('events.tickets.export-pdf');
+
+    // Digital Pass setup
+    // Wizard page
+    Route::get('/digital-pass/setup', [DigitalPassController::class, 'show'])
+        ->name('digital-pass.setup');
+
+    // Form POST from the Blade you pasted
+    Route::post('/digital-pass/voice', [DigitalPassController::class, 'storeVoice'])
+        ->name('digital-pass.store.voice');
+
+    Route::delete('/digital-pass', [DigitalPassController::class, 'destroy'])
+        ->name('digital-pass.destroy');
+
+    Route::get('/digital-pass', [DigitalPassController::class, 'show'])
+        ->name('digital-pass.show');
+
+    Route::post('/digital-pass/voice-sample', [DigitalPassController::class, 'storeVoiceSample'])
+        ->name('digital-pass.voice.sample');
+
+    Route::post('/digital-pass/voice-finalize', [DigitalPassController::class, 'finalizeVoice'])
+        ->name('digital-pass.voice.finalize');
+
+    Route::post('/digital-pass/face-sample', [DigitalPassController::class, 'storeFaceSample'])
+        ->name('digital-pass.face.sample');
+
+    Route::post('/digital-pass/face-finalize', [DigitalPassController::class, 'finalizeFace'])
+        ->name('digital-pass.face.finalize');
+
+    Route::get('/events/{event}/digital-checkin', [TicketController::class, 'digitalCheckinPage'])
+        ->name('tickets.digital.checkin');
+
+    Route::post('/events/{event}/digital-checkin/voice', [TicketController::class, 'digitalCheckinVoice'])
+        ->name('tickets.digital.checkin.voice');
+
+
+     // Check-in hub for an event
+    Route::get('/events/{event}/check-in', [TicketController::class, 'checkinHub'])
+        ->name('events.checkin');
+
+    // Normal QR-code check-in (you may already have this route – if so, keep your existing name/path)
+    Route::get('/events/{event}/check-in/qr', [TicketController::class, 'scanPage'])
+        ->name('tickets.scan');
+
+    // Digital Pass – voice check-in (you likely already have this, just keep the name consistent)
+    Route::get('/events/{event}/check-in/voice', [TicketController::class, 'digitalCheckinPage'])
+        ->name('tickets.digital-checkin');
+
+    // Digital Pass – face ID (placeholder “coming soon” page)
+    Route::get('/events/{event}/check-in/face', [TicketController::class, 'faceCheckinPage'])
+        ->name('tickets.face-checkin');
 });
+
 
 /*
 |--------------------------------------------------------------------------
@@ -210,6 +264,8 @@ Route::post('/store-redirect', function (Illuminate\Http\Request $request) {
     session(['url.intended' => $request->redirect_to]);
     return redirect()->route('login');
 })->name('store.redirect');
+
+Route::view('/test', 'test')->name('test');
 
 
 require __DIR__.'/auth.php';

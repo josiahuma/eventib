@@ -69,6 +69,11 @@ class User extends Authenticatable
         return $this->hasMany(Organizer::class, 'user_id');
     }
 
+    public function digitalPass()
+    {
+        return $this->hasOne(UserDigitalPass::class);
+    }
+
 
 
 

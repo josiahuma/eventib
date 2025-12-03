@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Event;
 use App\Models\EventRegistration;
 use App\Models\EventTicket;
+use App\Services\DigitalPassService;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -14,6 +16,8 @@ use BaconQrCode\Renderer\Image\ImagickImageBackEnd;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
+
+
 
 
 class TicketController extends Controller
@@ -259,6 +263,36 @@ class TicketController extends Controller
         return $resp;
     }
 
+     /** Organizer: central check-in hub (QR + Digital Pass). */
+    public function checkinHub(Event $event)
+    {
+        $u = Auth::user();
+        abort_unless($u && ($event->user_id === $u->id || ($u->is_admin ?? false)), 403);
+
+        $mode = $event->digital_pass_mode ?? 'off'; // off|optional|required
+
+        return view('tickets.checkin-hub', [
+            'event' => $event,
+            'mode'  => $mode,
+        ]);
+    }
+
+    /** Organizer: Face ID check-in (placeholder for now). */
+    public function faceCheckinPage(Event $event)
+    {
+        $u = Auth::user();
+        abort_unless($u && ($event->user_id === $u->id || ($u->is_admin ?? false)), 403);
+
+        // Event-level digital-pass config (same as voice)
+        $mode = $event->digital_pass_mode ?? 'off'; // off|optional|required
+
+        return view('tickets.face-checkin', [
+            'event' => $event,
+            'mode'  => $mode,
+        ]);
+    }
+
+
     /** Organizer: camera/scan page. */
     public function scanPage(Event $event)
     {
@@ -293,6 +327,9 @@ class TicketController extends Controller
             if (!$ticket) return response()->json(['ok'=>false,'reason'=>'Ticket not found'], 404);
             if ($ticket->status !== 'valid') return response()->json(['ok'=>false,'reason'=>'Ticket revoked'], 422);
 
+            // Ensure we have the parent registration loaded
+            $reg = $ticket->registration; // assumes relation exists
+
             $already = (bool) $ticket->checked_in_at;
             if (!$already) {
                 $now = now();
@@ -312,11 +349,20 @@ class TicketController extends Controller
                     ]);
             }
 
+            // Digital pass flags snapshot
+            $usesDp = (bool) ($reg?->uses_digital_pass ?? false);
+            $method = $usesDp ? ($reg->digital_pass_method ?: 'any') : null;
+
             return response()->json([
-                'ok' => true, 'type' => 'paid', 'already' => $already,
-                'serial' => $ticket->serial,
-                'checked_in_at' => optional($ticket->checked_in_at)->toIso8601String(),
+                'ok'                => true,
+                'type'              => 'paid',
+                'already'           => $already,
+                'serial'            => $ticket->serial,
+                'checked_in_at'     => optional($ticket->checked_in_at)->toIso8601String(),
+                'uses_digital_pass' => $usesDp,
+                'digital_pass_method' => $method,
             ]);
+
         }
 
         // FREE pass
@@ -366,15 +412,211 @@ class TicketController extends Controller
                 + (int) ($reg->party_adults ?? 0)
                 + (int) ($reg->party_children ?? 0);
 
+            $usesDp = (bool) ($reg->uses_digital_pass ?? false);
+            $method = $usesDp ? ($reg->digital_pass_method ?: 'any') : null;
+
             return response()->json([
-                'ok'             => true,
-                'type'           => 'free',
-                'already'        => $already,
-                'party'          => $party,
-                'checked_in_at'  => optional($reg->checked_in_at)->toIso8601String(),
+                'ok'                 => true,
+                'type'               => 'free',
+                'already'            => $already,
+                'party'              => $party,
+                'checked_in_at'      => optional($reg->checked_in_at)->toIso8601String(),
+                'uses_digital_pass'  => $usesDp,
+                'digital_pass_method'=> $method,
             ]);
+
         }
     }
+
+    /** Organizer: voice-based Digital Pass check-in page. */
+    /** Organizer: voice-based Digital Pass check-in page. */
+    public function digitalCheckinPage(Event $event)
+    {
+        $u = Auth::user();
+        abort_unless($u && ($event->user_id === $u->id || ($u->is_admin ?? false)), 403);
+
+        // Event-level digital-pass config
+        $mode = $event->digital_pass_mode ?? 'off'; // off|optional|required
+
+        // ✅ See if this event actually has any digital-pass attendees
+        $hasDigitalPassAttendees = EventRegistration::where('event_id', $event->id)
+            ->where('uses_digital_pass', true)
+            ->whereNotIn('status', ['canceled', 'cancelled', 'failed'])
+            ->exists();
+
+        return view('tickets.digital-checkin', [
+            'event'                   => $event,
+            'mode'                    => $mode,
+            'hasDigitalPassAttendees' => $hasDigitalPassAttendees,
+        ]);
+    }
+
+
+    /** Organizer: accept audio sample and match against digital-pass attendees. */
+    public function digitalCheckinVoice(Request $request, Event $event)
+    {
+        $u = Auth::user();
+        abort_unless($u && ($event->user_id === $u->id || ($u->is_admin ?? false)), 403);
+
+        $data = $request->validate([
+            'audio' => 'required|string', // data:audio/webm;base64,....
+        ]);
+
+        $dataUrl = $data['audio'];
+
+        if (! str_starts_with($dataUrl, 'data:')) {
+            return response()->json([
+                'ok'    => false,
+                'error' => 'Invalid audio payload.',
+            ], 422);
+        }
+
+        // Split "data:audio/webm;base64,AAAA..."
+        [, $base64] = explode(',', $dataUrl, 2);
+        $audioBytes = base64_decode($base64, true);
+
+        if ($audioBytes === false) {
+            return response()->json([
+                'ok'    => false,
+                'error' => 'Could not decode audio.',
+            ], 422);
+        }
+
+        // 1) Get embedding for the *probe* audio
+        $response = Http::attach(
+            'audio',
+            $audioBytes,
+            'probe.webm'
+        )->post(config('services.voice.url') . '/embed');
+
+        if (! $response->ok()) {
+            return response()->json([
+                'ok'    => false,
+                'error' => 'Voice service failed. Please try again.',
+            ], 500);
+        }
+
+        $probeEmbedding = $response->json('embedding');
+        if (! is_array($probeEmbedding) || empty($probeEmbedding)) {
+            return response()->json([
+                'ok'    => false,
+                'error' => 'Invalid embedding from voice service.',
+            ], 500);
+        }
+
+        // 2) Load all registrations for this event that opted in and have a snapshot
+        $regs = EventRegistration::query()
+            ->where('event_id', $event->id)
+            ->where('uses_digital_pass', true)
+            ->whereNotIn('status', ['canceled', 'cancelled', 'failed'])
+            ->with(['sessions', 'user.digitalPass'])
+            ->get();
+
+        if ($regs->isEmpty()) {
+            return response()->json([
+                'ok'    => false,
+                'error' => 'No digital-pass attendees found for this event.',
+            ], 404);
+        }
+
+        // 3) Compare embeddings & find best match
+        // NOTE: we'll start SUPER relaxed so we can see scores.
+        $threshold = 0.65;   // <-- for debugging: literally accept ANY score
+        $scores    = [];
+        $anySnapshots = false;
+
+        foreach ($regs as $reg) {
+            // Prefer frozen snapshot at registration time…
+            $snapshot = $reg->voice_embedding_snapshot;
+
+            // …but if it’s missing for some reason, fall back to the user’s current pass
+            if (! $snapshot && $reg->user && $reg->user->digitalPass) {
+                $snapshot = $reg->user->digitalPass->voice_embedding;
+            }
+
+            // If stored as JSON string, decode
+            if (is_string($snapshot)) {
+                $decoded = json_decode($snapshot, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $snapshot = $decoded;
+                }
+            }
+
+            if (! is_array($snapshot) || empty($snapshot)) {
+                continue;
+            }
+
+            $anySnapshots = true;
+
+            $sim = $this->cosineSimilarity($probeEmbedding, $snapshot);
+            if ($sim === null) {
+                continue;
+            }
+
+            $scores[] = [
+                'reg'   => $reg,
+                'score' => $sim,
+            ];
+        }
+
+        if (!$anySnapshots) {
+            return response()->json([
+                'ok'    => false,
+                'error' => 'No usable voice snapshots found for any attendee.',
+            ], 404);
+        }
+
+        if (empty($scores)) {
+            return response()->json([
+                'ok'    => false,
+                'error' => 'No comparable embeddings (dimension mismatch).',
+            ], 404);
+        }
+
+        usort($scores, fn ($a, $b) => $b['score'] <=> $a['score']);
+        $best = $scores[0];
+
+        $reg   = $best['reg'];
+        $score = $best['score'];
+
+        // ❗ Enforce the threshold: ONLY accept if score is high enough
+        if ($score < $threshold) {
+            return response()->json([
+                'ok'    => false,
+                'error' => 'No confident match. Please try again or use QR.',
+                'best'  => round($score, 3),
+                'name'  => $reg->name,
+                'email' => $reg->email,
+            ]);
+        }
+
+        // 4) Mark as checked-in (idempotent)
+        $already = (bool) $reg->checked_in_at;
+        if (! $already) {
+            $reg->forceFill([
+                'checked_in_at' => now(),
+                'checked_in_by' => $u->id,
+            ])->save();
+        }
+
+        $sessions = $reg->sessions?->pluck('session_name')->join(', ') ?: 'All sessions';
+
+        return response()->json([
+            'ok'            => true,
+            'already'       => $already,
+            'name'          => $reg->name,
+            'email'         => $reg->email,
+            'party'         => 1 + (int) $reg->party_adults + (int) $reg->party_children,
+            'sessions'      => $sessions,
+            'score'         => round($score, 3),
+            'raw_score'     => $score,
+            'checked_in_at' => optional($reg->checked_in_at)->toIso8601String(),
+        ]);
+
+    }
+
+
+
 
 
     /**
@@ -504,4 +746,34 @@ class TicketController extends Controller
 
         abort_unless($ownsById || $ownsByEmail, 403);
     }
+
+    private function cosineSimilarity(array $a, array $b): ?float
+    {
+        $lenA = count($a);
+        $lenB = count($b);
+
+        if ($lenA === 0 || $lenB === 0 || $lenA !== $lenB) {
+            return null;
+        }
+
+        $dot = 0.0;
+        $normA = 0.0;
+        $normB = 0.0;
+
+        for ($i = 0; $i < $lenA; $i++) {
+            $va = (float) $a[$i];
+            $vb = (float) $b[$i];
+
+            $dot   += $va * $vb;
+            $normA += $va * $va;
+            $normB += $vb * $vb;
+        }
+
+        if ($normA <= 0 || $normB <= 0) {
+            return null;
+        }
+
+        return $dot / (sqrt($normA) * sqrt($normB));
+    }
+
 }

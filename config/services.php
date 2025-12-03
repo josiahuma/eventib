@@ -58,5 +58,10 @@ return [
         'secret'  => env('TURNSTILE_SECRET_KEY'),
     ],
 
+    'voice' => [
+        'url' => env('VOICE_SERVICE_URL', 'http://127.0.0.1:8001'),
+    ],
+
+
 
 ];

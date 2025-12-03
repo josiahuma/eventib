@@ -181,6 +181,9 @@ class EventController extends Controller
             'sessions.*.time' => 'required',
             'capacity'        => 'nullable|integer|min:0',
 
+            'digital_pass_mode'    => 'required|in:off,optional,required',
+            'digital_pass_methods' => 'required|in:voice,face,both',
+
             'payout_method_id'  => ['nullable','integer', Rule::exists('user_payout_methods', 'id')->where(fn ($q) => $q->where('user_id', Auth::id()))],
         ]);
 
@@ -255,6 +258,8 @@ class EventController extends Controller
             'is_recurring'       => $request->boolean('is_recurring'),
             'recurrence_summary' => $request->input('recurrence_summary') ?: null,
             'capacity'         => $validated['capacity'] ?? null,
+            'digital_pass_mode'    => $validated['digital_pass_mode'],
+            'digital_pass_methods' => $validated['digital_pass_methods'],
         ]);
 
         if ($request->has('sessions')) {
@@ -310,6 +315,8 @@ class EventController extends Controller
             'is_recurring'   => 'nullable|boolean',
             'recurrence_summary' => 'nullable|string|max:255',
             'capacity'      => 'nullable|integer|min:0',
+            'digital_pass_mode'    => 'required|in:off,optional,required',
+            'digital_pass_methods' => 'required|in:voice,face,both',
 
             // media
             'avatar'        => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
@@ -344,6 +351,8 @@ class EventController extends Controller
         $event->location         = $validated['location'] ?? null;
         $event->description      = $validated['description'] ?? null;
         $event->capacity         = $validated['capacity'] ?? null;
+        $event->digital_pass_mode    = $validated['digital_pass_mode'];
+        $event->digital_pass_methods = $validated['digital_pass_methods'];
 
         // ⚠️ Do NOT touch ticket_cost, ticket_currency, payout_method_id, fee_mode, fee_bps here.
         // They are locked after creation.

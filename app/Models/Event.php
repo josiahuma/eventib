@@ -12,12 +12,30 @@ class Event extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id','name','organizer_id','category','tags','location','description',
-        'avatar_url','banner_url','ticket_cost','is_promoted','public_id',
-        'ticket_currency','payout_method_id', 'is_disabled',
-        'fee_mode', 'fee_bps',
-        'is_recurring', 'recurrence_summary',
+        'user_id',
+        'name',
+        'organizer_id',
+        'category',
+        'tags',
+        'location',
+        'description',
+        'avatar_url',
+        'banner_url',
+        'ticket_cost',
+        'is_promoted',
+        'public_id',
+        'ticket_currency',
+        'payout_method_id',
+        'is_disabled',
+        'fee_mode',
+        'fee_bps',
+        'is_recurring',
+        'recurrence_summary',
         'capacity',
+
+        // 🔐 NEW
+        'digital_pass_mode',      // off | optional | required
+        'digital_pass_methods',   // voice | face | both
     ];
 
     protected $casts = [
@@ -27,6 +45,10 @@ class Event extends Model
         'is_disabled' => 'boolean',
         'fee_bps'     => 'integer',
         'is_recurring'=> 'boolean',
+
+        // not strictly required, but keeps IDE happy
+        'digital_pass_mode'    => 'string',
+        'digital_pass_methods' => 'string',
     ];
 
     public function getCurrencySymbolAttribute(): string
@@ -157,8 +179,4 @@ class Event extends Model
     {
         return $this->belongsTo(Organizer::class);
     }
-
-
-
-
 }

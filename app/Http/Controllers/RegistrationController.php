@@ -2,17 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Support\Str;
 use App\Mail\NewRegistrationNotificationMail;
 use App\Mail\RegistrationConfirmedMail;
 use App\Models\Event;
 use App\Models\EventRegistration;
 use App\Models\EventRegistrationItem;
+use App\Models\UserDigitalPass;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Stripe\StripeClient;
-
 
 class RegistrationController extends Controller
 {
@@ -43,8 +42,6 @@ class RegistrationController extends Controller
                 ->exists();
         }
 
-
-
         return view('events.register', [
             'event'             => $event,
             'isPaidEvent'       => $isPaidEvent,
@@ -65,10 +62,13 @@ class RegistrationController extends Controller
             'mobile'        => 'nullable|string|max:30',
             'session_ids'   => 'required|array|min:1',
             'session_ids.*' => 'integer|exists:event_sessions,id',
+
+            // digital-pass fields from the form (optional)
+            'digital_pass_method' => 'nullable|string|in:voice,face,any',
         ];
 
         $hasCategories = $event->categories->count() > 0;
-        $isSinglePaid  = !$hasCategories && (($event->ticket_cost ?? 0) > 0);
+        $isSinglePaid  = ! $hasCategories && (($event->ticket_cost ?? 0) > 0);
 
         $extraRules = $hasCategories
             ? ['categories' => 'required|array'] // categories[catId] => qty
@@ -81,12 +81,116 @@ class RegistrationController extends Controller
 
         $validated = $request->validate($baseRules + $extraRules);
 
+        // ============================
+        //  DIGITAL PASS EVENT POLICY
+        // ============================
+                // ============================
+        //  Digital pass event policy
+        // ============================
+        $useDigitalPass = $request->boolean('use_digital_pass'); // checkbox
+        $digitalMethod  = $validated['digital_pass_method'] ?? null;
+
+        $mode    = $event->digital_pass_mode ?? 'off';      // off | optional | required
+        $methods = $event->digital_pass_methods ?? 'both';  // voice | face | both
+
+        $validMethods = ['voice', 'face', 'any'];
+
+        // Normalise initial selection
+        if ($useDigitalPass && ! in_array($digitalMethod, $validMethods, true)) {
+            $digitalMethod = null;
+        }
+
+        // If event-level is OFF, ignore any user choice
+        if ($mode === 'off') {
+            $useDigitalPass = false;
+            $digitalMethod  = null;
+        } else {
+            // Restrict by allowed methods on the event
+            $allowedSet = match ($methods) {
+                'voice' => ['voice'],
+                'face'  => ['face'],
+                default => ['voice', 'face', 'any'], // both
+            };
+
+            if ($digitalMethod && ! in_array($digitalMethod, $allowedSet, true)) {
+                $digitalMethod = null;
+            }
+
+            // If user opted in but no method chosen, pick a sensible default
+            if ($useDigitalPass && ! $digitalMethod) {
+                $digitalMethod = match ($methods) {
+                    'voice' => 'voice',
+                    'face'  => 'face',
+                    default => 'any',
+                };
+            }
+
+            // 🔴 REQUIRED mode – user must be logged in, must tick the box,
+            // and must have an active Digital Pass.
+            if ($mode === 'required') {
+                // 1) If not logged in -> send to login with a clear message
+                if (! Auth::check()) {
+                    return redirect()
+                        ->route('login')
+                        ->with('error', 'This event requires an Eventib Digital Pass. Please log in or create an account, set up your Digital Pass, then return to complete registration.');
+                }
+
+                // 2) User is logged in but DID NOT tick "use digital pass"
+                if (! $useDigitalPass) {
+                    return back()
+                        ->withErrors([
+                            'use_digital_pass' => 'This event requires a Digital Pass. Please tick this box to confirm you want to use it for check-in.',
+                        ])
+                        ->withInput();
+                }
+
+                $user = Auth::user();
+                $pass = $user?->digitalPass;
+
+                // For now we enforce voice pass (face will come later)
+                $hasVoiceEmbedding = $pass && $pass->is_active && ! empty($pass->voice_embedding);
+
+                // 3) Logged in but no usable Digital Pass yet -> send to setup
+                if (! $hasVoiceEmbedding) {
+                    return redirect()
+                        ->route('digital-pass.show')
+                        ->with('error', 'This event requires a Digital Pass. Please set up your voice pass first, then come back to complete registration.');
+                }
+
+                // If event only allows one method, force it
+                if (! $digitalMethod) {
+                    $digitalMethod = match ($methods) {
+                        'voice' => 'voice',
+                        'face'  => 'face',
+                        default => 'any',
+                    };
+                }
+
+                // Required mode always uses digital pass once the above checks pass
+                $useDigitalPass = true;
+            } else {
+                // 🟡 OPTIONAL mode – if user opted in, make sure they actually *can* use digital pass
+                if ($useDigitalPass) {
+                    $user = Auth::user();
+                    $pass = $user?->digitalPass;
+                    $hasVoiceEmbedding = $pass && $pass->is_active && ! empty($pass->voice_embedding);
+
+                    // If they don't have a usable pass yet, quietly fall back to non-digital
+                    if (! $hasVoiceEmbedding) {
+                        $useDigitalPass = false;
+                        $digitalMethod  = null;
+                    }
+                }
+            }
+        }
+
+
         // Validate sessions belong to this event
         $validSessionIds = $event->sessions()
             ->whereIn('id', $validated['session_ids'])
             ->pluck('id')->all();
 
-        if (!$validSessionIds) {
+        if (! $validSessionIds) {
             return back()
                 ->withErrors(['session_ids' => 'Please select at least one valid session for this event.'])
                 ->withInput();
@@ -95,8 +199,8 @@ class RegistrationController extends Controller
         $currency = strtolower($event->ticket_currency ?? 'gbp');
 
         /* ============================
-         |   CATEGORIES PRICING FLOW  |
-         ============================ */
+        |   CATEGORIES PRICING FLOW  |
+        ============================ */
         if ($hasCategories) {
             // Build selected line items
             $selected = collect($request->input('categories', []))
@@ -106,7 +210,7 @@ class RegistrationController extends Controller
             $lines = collect();
             foreach ($selected as $s) {
                 $cat = $event->categories->firstWhere('id', $s['id']);
-                if (!$cat) continue;
+                if (! $cat) continue;
 
                 $lines->push([
                     'category'      => $cat,
@@ -123,13 +227,13 @@ class RegistrationController extends Controller
                     ->withInput();
             }
 
-            $totalQty   = (int) $lines->sum('quantity');
-            $totalMajor = (float) $lines->sum('line_total');
+            $totalQty      = (int) $lines->sum('quantity');
+            $totalMajor    = (float) $lines->sum('line_total');
             $subtotalMajor = (float) $totalMajor; // for future use if we add fees/discounts
             $feeMajor      = 0.0; // for future use if we add fees/discounts
 
             if ($event->feeMode() === 'pass') {
-                $feeMajor = round($subtotalMajor * $event->feeRate(), 2); //per transaction fee
+                $feeMajor = round($subtotalMajor * $event->feeRate(), 2); // per transaction fee
             }
 
             // ❗ Duplicate gate ONLY if this is effectively a FREE registration (total = 0)
@@ -160,28 +264,35 @@ class RegistrationController extends Controller
 
             if ($registration) {
                 $registration->fill([
-                    'name'     => $validated['name'],
-                    'email'    => $validated['email'],
-                    'mobile'   => $validated['mobile'] ?? null,
-                    'status'   => $subtotalMajor > 0 ? 'pending' : 'free',
-                    'amount'   => $subtotalMajor, // organizer revenue (ticket only)
-                    'currency' => $currency,
-                    'quantity' => $totalQty,
-                    'platform_fee' => $feeMajor, // platform fee (if passed on)
+                    'name'             => $validated['name'],
+                    'email'            => $validated['email'],
+                    'mobile'           => $validated['mobile'] ?? null,
+                    'status'           => $subtotalMajor > 0 ? 'pending' : 'free',
+                    'amount'           => $subtotalMajor, // organizer revenue (ticket only)
+                    'currency'         => $currency,
+                    'quantity'         => $totalQty,
+                    'platform_fee'     => $feeMajor, // platform fee (if passed on)
+                    // 🔐 Digital pass flags
+                    'uses_digital_pass'   => $useDigitalPass,
+                    'digital_pass_method' => $digitalMethod,
                 ])->save();
+
                 $registration->items()->delete();
             } else {
                 $registration = EventRegistration::create([
-                    'event_id' => $event->id,
-                    'user_id'  => Auth::id(),
-                    'name'     => $validated['name'],
-                    'email'    => $validated['email'],
-                    'mobile'   => $validated['mobile'] ?? null,
-                    'status'   => $subtotalMajor > 0 ? 'pending' : 'free',
-                    'amount'   => $subtotalMajor,
-                    'currency' => $currency,
-                    'quantity' => $totalQty,
-                    'platform_fee' => $feeMajor, // platform fee (if passed on)
+                    'event_id'         => $event->id,
+                    'user_id'          => Auth::id(),
+                    'name'             => $validated['name'],
+                    'email'            => $validated['email'],
+                    'mobile'           => $validated['mobile'] ?? null,
+                    'status'           => $subtotalMajor > 0 ? 'pending' : 'free',
+                    'amount'           => $subtotalMajor,
+                    'currency'         => $currency,
+                    'quantity'         => $totalQty,
+                    'platform_fee'     => $feeMajor, // platform fee (if passed on)
+                    // 🔐 Digital pass flags
+                    'uses_digital_pass'   => $useDigitalPass,
+                    'digital_pass_method' => $digitalMethod,
                 ]);
             }
 
@@ -198,6 +309,9 @@ class RegistrationController extends Controller
 
             $registration->sessions()->sync($validSessionIds);
 
+            // 🧬 Snapshot the user's current digital pass (if opted in)
+            $this->snapshotDigitalPass($registration);
+
             // FREE categories selection -> confirm immediately
             if ($totalMajor <= 0) {
                 if ($event->user?->email) {
@@ -210,7 +324,10 @@ class RegistrationController extends Controller
                 }
 
                 Mail::to($registration->email)->send(new RegistrationConfirmedMail($event, $registration));
-                return redirect()->to(route('events.register.result', ['event' => $event, 'registered' => 1]));
+
+                return redirect()->to(
+                    route('events.register.result', ['event' => $event, 'registered' => 1])
+                );
             }
 
             // PAID categories -> Stripe
@@ -238,12 +355,18 @@ class RegistrationController extends Controller
             }
 
             $session = $stripe->checkout->sessions->create([
-                'mode'                  => 'payment',
-                'payment_method_types'  => ['card'],
-                'line_items'            => $lineItems,
-                'success_url'           => route('events.register.result', ['event' => $event, 'paid' => 1]).'&session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url'            => route('events.register.result', ['event' => $event, 'canceled' => 1]).'&session_id={CHECKOUT_SESSION_ID}',
-                'metadata'              => [
+                'mode'                 => 'payment',
+                'payment_method_types' => ['card'],
+                'line_items'           => $lineItems,
+                'success_url'          => route('events.register.result', [
+                        'event' => $event,
+                        'paid'  => 1,
+                    ]). '&session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url'           => route('events.register.result', [
+                        'event'    => $event,
+                        'canceled' => 1,
+                    ]). '&session_id={CHECKOUT_SESSION_ID}',
+                'metadata'             => [
                     'purpose'         => 'event_registration',
                     'event_id'        => (string) $event->id,
                     'registration_id' => (string) $registration->id,
@@ -259,13 +382,14 @@ class RegistrationController extends Controller
             ]);
 
             $registration->update(['stripe_session_id' => $session->id]);
+
             return redirect()->away($session->url);
         }
 
         /* ==============================
-         |   LEGACY SINGLE-PRICE FLOW   |
-         |   (paid can re-order; free = one) 
-         ============================== */
+        |   LEGACY SINGLE-PRICE FLOW   |
+        |   (paid can re-order; free = one) 
+        ============================== */
         $isPaid = ($event->ticket_cost ?? 0) > 0;
 
         $request->validate(
@@ -294,15 +418,15 @@ class RegistrationController extends Controller
             }
         }
 
-        $subtotalMajor = $isPaid ? round(($event->ticket_cost ?? 0) * $quantity, 2) : 0.0;
-        $feeMajor      = 0.0;
-        if ($isPaid && $event->feeMode() === 'pass') {
-            $feeMajor = round($subtotalMajor * $event->feeRate(), 2); //per transaction fee
-        }
-
         $quantity      = $isPaid ? (int) $request->input('quantity') : 1;
         $partyAdults   = $isPaid ? 0 : (int) ($request->input('party_adults') ?? 0);
         $partyChildren = $isPaid ? 0 : (int) ($request->input('party_children') ?? 0);
+
+        $subtotalMajor = $isPaid ? round(($event->ticket_cost ?? 0) * $quantity, 2) : 0.0;
+        $feeMajor      = 0.0;
+        if ($isPaid && $event->feeMode() === 'pass') {
+            $feeMajor = round($subtotalMajor * $event->feeRate(), 2); // per transaction fee
+        }
 
         $registration = EventRegistration::where('event_id', $event->id)
             ->where('status', 'pending')
@@ -322,8 +446,11 @@ class RegistrationController extends Controller
                 'party_children' => $partyChildren,
                 'currency'       => $currency,
                 'amount'         => $subtotalMajor,
-                'platform_fee'   => $feeMajor, // platform fee (if passed on)
+                'platform_fee'   => $feeMajor,
                 'status'         => $isPaid ? 'pending' : 'free',
+                // 🔐 Digital pass flags
+                'uses_digital_pass'   => $useDigitalPass,
+                'digital_pass_method' => $digitalMethod,
             ])->save();
         } else {
             $registration = EventRegistration::create([
@@ -334,15 +461,21 @@ class RegistrationController extends Controller
                 'mobile'         => $request->input('mobile') ?? null,
                 'status'         => $isPaid ? 'pending' : 'free',
                 'amount'         => $subtotalMajor,
-                'platform_fee'   => $feeMajor, // platform fee (if passed on)
+                'platform_fee'   => $feeMajor,
                 'currency'       => $currency,
                 'quantity'       => $quantity,
                 'party_adults'   => $partyAdults,
                 'party_children' => $partyChildren,
+                // 🔐 Digital pass flags
+                'uses_digital_pass'   => $useDigitalPass,
+                'digital_pass_method' => $digitalMethod,
             ]);
         }
 
         $registration->sessions()->sync($validSessionIds);
+
+        // 🧬 Snapshot the user's current digital pass (if opted in)
+        $this->snapshotDigitalPass($registration);
 
         if (! $isPaid) {
             if ($event->user?->email) {
@@ -355,7 +488,10 @@ class RegistrationController extends Controller
             }
 
             Mail::to($registration->email)->send(new RegistrationConfirmedMail($event, $registration));
-            return redirect()->to(route('events.register.result', ['event' => $event, 'registered' => 1]));
+
+            return redirect()->to(
+                route('events.register.result', ['event' => $event, 'registered' => 1])
+            );
         }
 
         // Build line items
@@ -369,6 +505,7 @@ class RegistrationController extends Controller
                 ],
                 'quantity' => $quantity,
             ];
+
             if ($feeMajor > 0) {
                 $lineItems[] = [
                     'price_data' => [
@@ -386,9 +523,15 @@ class RegistrationController extends Controller
             'mode'                 => 'payment',
             'payment_method_types' => ['card'],
             'line_items'           => $lineItems,
-            'success_url' => route('events.register.result', ['event' => $event, 'paid' => 1]).'&session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url'  => route('events.register.result', ['event' => $event, 'canceled' => 1]).'&session_id={CHECKOUT_SESSION_ID}',
-            'metadata'    => [
+            'success_url'          => route('events.register.result', [
+                    'event' => $event,
+                    'paid'  => 1,
+                ]) . '&session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url'           => route('events.register.result', [
+                    'event'    => $event,
+                    'canceled' => 1,
+                ]) . '&session_id={CHECKOUT_SESSION_ID}',
+            'metadata'             => [
                 'event_id'        => (string) $event->id,
                 'registration_id' => (string) $registration->id,
                 'session_ids'     => implode(',', $validSessionIds),
@@ -403,8 +546,11 @@ class RegistrationController extends Controller
         ]);
 
         $registration->update(['stripe_session_id' => $session->id]);
+
         return redirect()->away($session->url);
     }
+
+
 
     public function result(Request $request, Event $event)
     {
@@ -427,20 +573,21 @@ class RegistrationController extends Controller
             'categories' => fn ($q) => $q->where('is_active', true)->orderBy('sort')->orderBy('id'),
         ]);
 
-        $state = 'info';
-        $title = 'Registration';
+        $state   = 'info';
+        $title   = 'Registration';
         $message = null;
 
         if ($request->boolean('registered')) {
-            $state = 'success';
-            $title = 'You’re registered! 🎉';
+            $state   = 'success';
+            $title   = 'You’re registered! 🎉';
             $message = 'We’ve saved your registration. See you there!';
+
             return view('events.register-result', compact('event', 'state', 'title', 'message'));
         }
 
         if ($request->boolean('paid') && $request->filled('session_id')) {
             try {
-                $stripe  = new \Stripe\StripeClient(config('services.stripe.secret'));
+                $stripe  = new StripeClient(config('services.stripe.secret'));
                 $session = $stripe->checkout->sessions->retrieve($request->query('session_id'), []);
 
                 if ($session && $session->payment_status === 'paid') {
@@ -477,10 +624,10 @@ class RegistrationController extends Controller
                                 Mail::to($event->user->email)
                                     ->send(new NewRegistrationNotificationMail($event, $reg));
                             }
+
                             Mail::to($reg->email)
                                 ->send(new RegistrationConfirmedMail($event, $reg));
                         } catch (\Throwable $mailErr) {
-                            // Optional: log mail errors, but don't fail the success page
                             \Log::warning('Registration paid mail failed', [
                                 'event_id' => $event->id,
                                 'reg_id'   => $reg->id ?? null,
@@ -510,16 +657,73 @@ class RegistrationController extends Controller
         $state   = 'info';
         $title   = 'Status not clear';
         $message = 'If you just completed checkout, please refresh in a moment.';
+
         return view('events.register-result', compact('event', 'state', 'title', 'message'));
     }
 
     private function currencyExponent(string $currency): int
     {
-        $c = strtolower($currency);
+        $c     = strtolower($currency);
         $zero  = ['bif','clp','djf','gnf','jpy','kmf','krw','mga','pyg','rwf','ugx','vnd','vuv','xaf','xof','xpf'];
         if (in_array($c, $zero, true)) return 0;
+
         $three = ['bhd','jod','kwd','omr','tnd'];
         if (in_array($c, $three, true)) return 3;
+
         return 2;
+    }
+
+    /**
+     * In future, this will copy the user's digital-pass embeddings onto the registration
+     * (voice_embedding_snapshot, face_embedding_snapshot).
+     *
+     * For now it's just a placeholder so we can wire it in later without touching
+     * the main registration logic again.
+     */
+    private function snapshotDigitalPass(EventRegistration $registration): void
+    {
+        // If they didn't opt in, nothing to do
+        if (! $registration->uses_digital_pass) {
+            return;
+        }
+
+        $user = $registration->user;
+        if (! $user) {
+            // guest registration or no user linked
+            return;
+        }
+
+        /** @var \App\Models\UserDigitalPass|null $pass */
+        $pass = $user->digitalPass;
+
+        if (! $pass || ! $pass->is_active) {
+            // No enrolled digital pass yet; you *could* also flip uses_digital_pass back to false here.
+            return;
+        }
+
+        // Work out a sensible method if it's missing/invalid
+        $method = $registration->digital_pass_method;
+        $validMethods = ['voice', 'face', 'any'];
+
+        if (! in_array($method, $validMethods, true)) {
+            $hasVoice = ! empty($pass->voice_embedding);
+            $hasFace  = ! empty($pass->face_embedding);
+
+            if ($hasVoice && $hasFace) {
+                $method = 'any';
+            } elseif ($hasVoice) {
+                $method = 'voice';
+            } elseif ($hasFace) {
+                $method = 'face';
+            } else {
+                // No embeddings on the pass – bail
+                return;
+            }
+        }
+
+        $registration->digital_pass_method        = $method;
+        $registration->voice_embedding_snapshot   = $pass->voice_embedding ?: null;
+        $registration->face_embedding_snapshot    = $pass->face_embedding ?: null;
+        $registration->save();
     }
 }

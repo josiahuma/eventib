@@ -75,6 +75,23 @@
                     <img src="{{ $image }}" alt="" class="h-12 w-12 rounded-lg object-cover">
                 @endif
             </div>
+                {{-- If user is NOT logged in and event REQUIRES Digital Pass --}}
+                @if(!auth()->check() && $event->digital_pass_mode === 'required')
+                    <div class="mt-4 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        <div class="font-semibold mb-0.5">
+                            This event requires an Eventib Digital Pass
+                        </div>
+                        <p class="text-xs md:text-sm">
+                            To register, you’ll need to create an account and set up your Digital Pass
+                            (voice/face). Please
+                            <a href="{{ route('login') }}" class="underline font-medium">log in</a>
+                            or
+                            <a href="{{ route('register') }}" class="underline font-medium">create a free account</a>
+                            first, then come back to this page.
+                        </p>
+                    </div>
+                @endif
+
 
             <form action="{{ route('events.register.store', $event) }}"
                   method="POST"
@@ -108,7 +125,7 @@
                                value="{{ old('email', optional(auth()->user())->email) }}"
                                class="mt-1 w-full rounded-lg border-gray-300" required>
                         {{-- This flag is set ONLY for free events in the controller --}}
-                        @if(Auth::check() && !empty($alreadyRegistered))                            
+                        @if(Auth::check() && !empty($alreadyRegistered))
                             <p class="text-sm text-rose-600 mt-1">You are already registered for this event.</p>
                         @endif
                         @error('email') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
@@ -146,7 +163,6 @@
                     </div>
                     @error('session_ids') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
                 </div>
-
 
                 {{-- Categories mode --}}
                 @if($hasCats)
@@ -237,6 +253,67 @@
                     </div>
                 @endif
 
+               {{-- Digital pass section --}}
+                @if(auth()->check())
+                    @php
+                        $dp         = auth()->user()->digitalPass;
+                        $dpRequired = $event->digital_pass_mode === 'required';
+                    @endphp
+
+                    @if($dp && $dp->is_active)
+                        <div class="mt-6 border rounded-lg p-3 bg-slate-50">
+                            <label class="flex items-start gap-2">
+                                <input
+                                    type="checkbox"
+                                    name="use_digital_pass"
+                                    value="1"
+                                    class="mt-1 rounded border-gray-300"
+                                    {{-- keep checkbox checked on validation error --}}
+                                    @checked(old('use_digital_pass'))
+                                >
+                                <span>
+                                    <span class="font-medium">
+                                        Use my Digital Pass for check-in
+                                    </span><br>
+
+                                    {{-- 👇 Required vs optional helper text --}}
+                                    @if($dpRequired)
+                                        <span class="text-xs text-red-600 font-medium">
+                                            This event requires a Digital Pass. Tick this box to continue.
+                                        </span>
+                                    @else
+                                        <span class="text-xs text-gray-500">
+                                            You can use your Digital Pass to check in with your voice or face instead of only scanning a QR code.
+                                        </span>
+                                    @endif
+                                </span>
+                            </label>
+
+                            {{-- 👇 Inline validation error for required events --}}
+                            @error('use_digital_pass')
+                                <p class="text-xs text-red-600 mt-1">
+                                    {{ $message }}
+                                </p>
+                            @enderror
+                        </div>
+                    @else
+                        <div class="mt-6 border rounded-lg p-3 bg-slate-50 flex items-center justify-between gap-3">
+                            <div>
+                                <div class="text-sm font-medium text-gray-800">
+                                    Set up your Digital Pass (optional)
+                                </div>
+                                <div class="text-xs text-gray-500 mt-0.5">
+                                    Create a secure voice/face pass once and reuse it to check in to supported events.
+                                </div>
+                            </div>
+                            <a href="{{ route('digital-pass.setup') }}"
+                            class="inline-flex items-center px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-medium text-white hover:bg-indigo-700">
+                                Setup
+                            </a>
+                        </div>
+                    @endif
+                @endif
+
                 <div class="mt-6 flex items-center justify-end gap-3">
                     <a href="{{ route('events.show', $event) }}" class="text-sm text-gray-600 hover:text-gray-800">Cancel</a>
                     <button type="submit"
@@ -253,6 +330,7 @@
         function ticketForm(cfg) {
             const MAX = 10;
             return {
+                // existing ticket state
                 mode: cfg.mode,
                 sym: cfg.sym || '',
                 unit: cfg.unit || 0,
@@ -262,6 +340,15 @@
                 cats: cfg.cats || [],
                 catQty: {},
 
+                // 🔊 Voice Pass state
+                voiceEnabled: false,
+                isRecording: false,
+                hasVoicePreview: false,
+                voicePreviewUrl: '',
+                recordingError: '',
+                mediaRecorder: null,
+                audioChunks: [],
+
                 init() {
                     const old = cfg.oldCats || {};
                     this.cats.forEach(c => {
@@ -270,6 +357,7 @@
                     });
                 },
 
+                // quantity controls
                 inc(what) {
                     if (what === 'qty') this.qty = Math.min(MAX, this.qty + 1);
                     if (what === 'adults') this.adults = Math.min(20, this.adults + 1);
@@ -281,6 +369,7 @@
                     if (what === 'children') this.children = Math.max(0, this.children - 1);
                 },
 
+                // categories
                 incCat(id) { this.catQty[id] = (this.catQty[id] || 0) + 1; },
                 decCat(id) { this.catQty[id] = Math.max(0, (this.catQty[id] || 0) - 1); },
                 totalQty() {
@@ -294,7 +383,90 @@
                 submitLabel() {
                     if (this.mode === 'cats') return this.total() > 0 ? 'Proceed to Payment' : 'Register';
                     return this.unit > 0 ? 'Proceed to Payment' : 'Register';
-                }
+                },
+
+                // 🔊 Voice Pass helpers
+                toggleVoiceEnabled() {
+                    this.voiceEnabled = !this.voiceEnabled;
+                    if (!this.voiceEnabled) {
+                        this.resetVoicePass();
+                    }
+                },
+
+                async startVoiceRecording() {
+                    this.recordingError = '';
+
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        this.recordingError = 'Your browser does not support audio recording.';
+                        return;
+                    }
+
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        this.audioChunks = [];
+                        this.mediaRecorder = new MediaRecorder(stream);
+
+                        this.mediaRecorder.ondataavailable = (e) => {
+                            if (e.data && e.data.size > 0) {
+                                this.audioChunks.push(e.data);
+                            }
+                        };
+
+                        this.mediaRecorder.onstop = () => {
+                            const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
+
+                            // create preview
+                            if (this.voicePreviewUrl) {
+                                URL.revokeObjectURL(this.voicePreviewUrl);
+                            }
+                            this.voicePreviewUrl = URL.createObjectURL(blob);
+                            this.hasVoicePreview = true;
+
+                            // convert to base64 and store in hidden input
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                if (this.$refs.voiceBlob) {
+                                    this.$refs.voiceBlob.value = reader.result; // data:audio/webm;base64,xxx
+                                }
+                            };
+                            reader.readAsDataURL(blob);
+
+                            // stop mic tracks
+                            if (this.mediaRecorder && this.mediaRecorder.stream) {
+                                this.mediaRecorder.stream.getTracks().forEach(t => t.stop());
+                            }
+                        };
+
+                        this.mediaRecorder.start();
+                        this.isRecording = true;
+                    } catch (err) {
+                        console.error(err);
+                        this.recordingError = 'Could not access microphone. Please check your permissions.';
+                    }
+                },
+
+                stopVoiceRecording() {
+                    if (this.mediaRecorder && this.isRecording) {
+                        this.mediaRecorder.stop();
+                        this.isRecording = false;
+                    }
+                },
+
+                resetVoicePass() {
+                    this.stopVoiceRecording();
+                    this.audioChunks = [];
+                    this.hasVoicePreview = false;
+                    this.recordingError = '';
+
+                    if (this.voicePreviewUrl) {
+                        URL.revokeObjectURL(this.voicePreviewUrl);
+                        this.voicePreviewUrl = '';
+                    }
+
+                    if (this.$refs.voiceBlob) {
+                        this.$refs.voiceBlob.value = '';
+                    }
+                },
             }
         }
     </script>

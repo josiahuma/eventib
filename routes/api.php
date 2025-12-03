@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\EventApiController;
 use App\Http\Controllers\Api\MobileCheckInController;
+use App\Http\Controllers\VoiceCheckController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:20,1');
 
@@ -20,3 +21,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/check-in', [MobileCheckInController::class, 'checkIn']);
     Route::get('/events/{event:public_id}/checked-in', [MobileCheckInController::class, 'checkedIn']);
 });
+
+Route::post('/voice-check', [VoiceCheckController::class, 'check'])
+    ->name('api.voice.check');

@@ -24,6 +24,10 @@
                     ];
                 })->values()
             : collect();
+
+        // 🔐 Digital pass defaults for the form
+        $dpMode    = old('digital_pass_mode', 'off');   // off | optional | required
+        $dpMethods = old('digital_pass_methods', 'both'); // voice | face | both
     @endphp
 
     <div
@@ -76,6 +80,7 @@
                             <span>Paid event</span>
                         </label>
                     </div>
+
                     {{-- 🔹 NEW: capacity for ALL events (especially free) --}}
                     <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
@@ -303,15 +308,16 @@
                 </div>
             </section>
 
-            {{-- STEP 2 — Basics --}}
+            {{-- STEP 2 — Basics + Digital Pass --}}
             <section x-show="step === 2" x-cloak class="space-y-6">
+                {{-- Basics card --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-gray-900">Basics</h3>
 
                     <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Event name</label>
-                            <input type="text" name="name" required class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500" placeholder="e.g., Product Launch 2025">
+                            <input type="text" name="name" value="{{ old('name') }}" required class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500" placeholder="e.g., Product Launch 2025">
                         </div>
 
                         <div>
@@ -320,7 +326,7 @@
                                     class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
                                 <option value="">— Select organizer —</option>
                                 @foreach($organizers as $organizer)
-                                    <option value="{{ $organizer->id }}">
+                                    <option value="{{ $organizer->id }}" @selected(old('organizer_id') == $organizer->id)>
                                         {{ $organizer->name }}
                                     </option>
                                 @endforeach
@@ -332,7 +338,7 @@
                             <select name="category" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
                                 <option value="">— Select —</option>
                                 @foreach (['Arts','Business','Charity','Community','Education','Entertainment','Food & Drink','Fashion','Health','Music','Religion','Sports','Technology','Travel'] as $cat)
-                                    <option value="{{ $cat }}">{{ $cat }}</option>
+                                    <option value="{{ $cat }}" @selected(old('category') === $cat)>{{ $cat }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -345,10 +351,10 @@
 
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                            <input id="location-input" type="text" name="location" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500" placeholder="Venue, address or place name" autocomplete="off">
-                            <input type="hidden" name="location_place_id" id="location_place_id">
-                            <input type="hidden" name="location_lat" id="location_lat">
-                            <input type="hidden" name="location_lng" id="location_lng">
+                            <input id="location-input" type="text" name="location" value="{{ old('location') }}" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500" placeholder="Venue, address or place name" autocomplete="off">
+                            <input type="hidden" name="location_place_id" id="location_place_id" value="{{ old('location_place_id') }}">
+                            <input type="hidden" name="location_lat" id="location_lat" value="{{ old('location_lat') }}">
+                            <input type="hidden" name="location_lng" id="location_lng" value="{{ old('location_lng') }}">
                         </div>
 
                         <div class="sm:col-span-2">
@@ -387,7 +393,88 @@
                                 Format text, add links and lists. We’ll save the formatted content.
                             </p>
                         </div>
+                    </div>
+                </div>
 
+                {{-- 🔐 Digital Pass settings card --}}
+                <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                    <h3 class="text-lg font-semibold text-gray-900">Digital Pass</h3>
+
+                    <p class="mt-2 text-sm text-gray-600">
+                        Decide whether attendees can or must use their Eventib Digital Pass (voice / face) when registering and checking in.
+                    </p>
+
+                    <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                        {{-- Off --}}
+                        <label class="flex items-start gap-2 border rounded-lg px-3 py-2 cursor-pointer
+                                      {{ $dpMode === 'off' ? 'border-indigo-500 bg-indigo-50/60' : 'border-gray-200' }}">
+                            <input type="radio" name="digital_pass_mode" value="off"
+                                   class="mt-1"
+                                   {{ $dpMode === 'off' ? 'checked' : '' }}>
+                            <div>
+                                <div class="font-medium text-gray-900">Not used</div>
+                                <p class="text-xs text-gray-500">
+                                    Normal QR / manual check-in only.
+                                </p>
+                            </div>
+                        </label>
+
+                        {{-- Optional --}}
+                        <label class="flex items-start gap-2 border rounded-lg px-3 py-2 cursor-pointer
+                                      {{ $dpMode === 'optional' ? 'border-indigo-500 bg-indigo-50/60' : 'border-gray-200' }}">
+                            <input type="radio" name="digital_pass_mode" value="optional"
+                                   class="mt-1"
+                                   {{ $dpMode === 'optional' ? 'checked' : '' }}>
+                            <div>
+                                <div class="font-medium text-gray-900">Optional</div>
+                                <p class="text-xs text-gray-500">
+                                    Attendees can opt-in to use their voice / face pass.
+                                </p>
+                            </div>
+                        </label>
+
+                        {{-- Required --}}
+                        <label class="flex items-start gap-2 border rounded-lg px-3 py-2 cursor-pointer
+                                      {{ $dpMode === 'required' ? 'border-indigo-500 bg-indigo-50/60' : 'border-gray-200' }}">
+                            <input type="radio" name="digital_pass_mode" value="required"
+                                   class="mt-1"
+                                   {{ $dpMode === 'required' ? 'checked' : '' }}>
+                            <div>
+                                <div class="font-medium text-gray-900">Required</div>
+                                <p class="text-xs text-gray-500">
+                                    Only attendees with an active Digital Pass can register.
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="mt-4">
+                        <label class="block text-xs font-medium text-gray-700 mb-1">
+                            Allowed Digital Pass methods
+                        </label>
+                        <div class="flex flex-wrap gap-4 text-sm">
+                            <label class="inline-flex items-center gap-2">
+                                <input type="radio" name="digital_pass_methods" value="voice"
+                                       class="text-indigo-600 border-gray-300"
+                                       {{ $dpMethods === 'voice' ? 'checked' : '' }}>
+                                <span>Voice only</span>
+                            </label>
+                            <label class="inline-flex items-center gap-2">
+                                <input type="radio" name="digital_pass_methods" value="face"
+                                       class="text-indigo-600 border-gray-300"
+                                       {{ $dpMethods === 'face' ? 'checked' : '' }}>
+                                <span>Face only</span>
+                            </label>
+                            <label class="inline-flex items-center gap-2">
+                                <input type="radio" name="digital_pass_methods" value="both"
+                                       class="text-indigo-600 border-gray-300"
+                                       {{ $dpMethods === 'both' ? 'checked' : '' }}>
+                                <span>Voice or face</span>
+                            </label>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">
+                            We’ll enforce this later in the registration / check-in flow. For now it’s stored with the event.
+                        </p>
                     </div>
                 </div>
 
@@ -640,7 +727,14 @@
         // Tom Select (tags)
         document.addEventListener("DOMContentLoaded", function () {
             if (window.TomSelect) {
-                new TomSelect("#tags", { plugins: ['remove_button'], persist: false, create: true, createOnBlur: true, placeholder: "Add tags…", delimiter: ',' });
+                new TomSelect("#tags", {
+                    plugins: ['remove_button'],
+                    persist: false,
+                    create: true,
+                    createOnBlur: true,
+                    placeholder: "Add tags…",
+                    delimiter: ','
+                });
             }
         });
 

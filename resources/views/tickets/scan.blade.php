@@ -14,6 +14,9 @@
                 <a href="{{ route('events.checkins.index', $event) }}" class="text-gray-600 hover:text-gray-800 underline">
                     View check-ins
                 </a>
+                <a href="{{ route('tickets.digital.checkin', $event) }}" class="text-gray-600 hover:text-gray-800 underline">
+                    Digital Pass check-in
+                </a>
                 <a href="{{ route('events.registrants', $event) }}" class="text-gray-600 hover:text-gray-800 underline">
                     Back to registrants
                 </a>
@@ -182,11 +185,29 @@
 
                 // Build nice subtext based on your payload shape
                 let sub = '';
-                if (data.type === 'paid') {
-                    sub = `Ticket #${data.serial}` + (data.already ? ' · already checked-in' : '');
-                } else if (data.type === 'free') {
-                    sub = `Party size ${data.party}` + (data.already ? ' · already checked-in' : '');
+
+                // Nice label for digital pass
+                let dpLabel = '';
+                if (data.uses_digital_pass) {
+                    const m = (data.digital_pass_method || 'any');
+                    const friendly = m === 'voice'
+                        ? 'Voice'
+                        : m === 'face'
+                            ? 'Face'
+                            : 'Voice or face';
+                    dpLabel = ` · Digital pass: ${friendly}`;
                 }
+
+                if (data.type === 'paid') {
+                    sub = `Ticket #${data.serial}`
+                        + (data.already ? ' · already checked-in' : '')
+                        + dpLabel;
+                } else if (data.type === 'free') {
+                    sub = `Party size ${data.party}`
+                        + (data.already ? ' · already checked-in' : '')
+                        + dpLabel;
+                }
+
 
                 setBadge(data.already ? 'Already checked' : 'Checked-in', data.already ? 'amber' : 'green');
                 show(data.already ? '⚠️ Already checked-in' : '✅ Checked-in', sub, !data.already);

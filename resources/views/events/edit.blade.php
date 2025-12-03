@@ -66,6 +66,10 @@
         // Fee mode + initial payout method (used in step 1 + Alpine config)
         $feeMode = old('fee_mode', $event->fee_mode ?? 'absorb');
         $initialPayoutMethodId = old('payout_method_id', $event->payout_method_id);
+
+        // 🔐 Digital pass defaults for edit form
+        $dpMode    = old('digital_pass_mode', $event->digital_pass_mode ?? 'off');    // off|optional|required
+        $dpMethods = old('digital_pass_methods', $event->digital_pass_methods ?? 'both'); // voice|face|both
     @endphp
 
     <div
@@ -107,7 +111,7 @@
             <input type="hidden" name="fee_mode" value="{{ $feeMode }}">
             <input type="hidden" name="ticket_currency" value="{{ $event->ticket_currency }}">
 
-            {{-- STEP 1 — Pricing & Payout (pricing locked; capacity + payout editable) --}}
+            {{-- STEP 1 — Pricing & Payout --}}
             <section x-show="step === 1" x-cloak class="space-y-6">
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <div class="flex items-start justify-between">
@@ -125,7 +129,6 @@
                         Pricing type (free vs paid), currency and ticket amounts stay fixed after creation.
                     </p>
 
-                    {{-- Summary --}}
                     <div class="mt-4 grid gap-3 text-sm text-gray-700">
                         <div>
                             <span class="font-medium">Event type:</span>
@@ -154,7 +157,6 @@
                         @endif
                     </div>
 
-                    {{-- 🔓 Capacity (editable for ALL events) --}}
                     <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -174,7 +176,6 @@
                         </div>
                     </div>
 
-                    {{-- 🔓 Payout destination (paid events only) --}}
                     @if($initialPaid)
                         <div class="mt-6 border-t border-gray-200 pt-4" x-show="pricing === 'paid'">
                             <h4 class="text-sm font-semibold text-gray-900">Payout destination</h4>
@@ -184,15 +185,13 @@
                                     <template x-for="m in eligibleMethods" :key="m.id">
                                         <label
                                             class="cursor-pointer rounded-xl border p-3 flex items-start gap-3"
-                                            :class="chosenMethodId === m.id ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white'"
-                                        >
+                                            :class="chosenMethodId === m.id ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white'">
                                             <input
                                                 type="radio"
                                                 class="mt-1 text-indigo-600 border-gray-300"
                                                 name="payout_method_id"
                                                 :value="m.id"
-                                                x-model="chosenMethodId"
-                                            >
+                                                x-model="chosenMethodId">
                                             <div>
                                                 <div class="font-medium text-gray-900" x-text="methodTitle(m)"></div>
                                                 <div class="text-sm text-gray-600" x-text="methodSubtitle(m)"></div>
@@ -204,8 +203,7 @@
 
                             <div
                                 class="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 text-xs"
-                                x-show="pricing === 'paid' && !eligibleMethods.length"
-                            >
+                                x-show="pricing === 'paid' && !eligibleMethods.length">
                                 No payout method saved for
                                 <span class="font-semibold" x-text="country"></span>.
                                 <a class="underline" :href="profilePayoutUrl + '?country=' + country" target="_blank">
@@ -239,7 +237,6 @@
                                 class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
                         </div>
 
-                        {{-- Organizer (dropdown) --}}
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Organizer</label>
                             <select name="organizer_id" required
@@ -291,9 +288,7 @@
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
 
-                            {{-- Quill editor wrapper --}}
                             <div class="border border-gray-300 rounded-lg overflow-hidden shadow-sm mb-2">
-                                {{-- Quill toolbar --}}
                                 <div id="desc-toolbar" class="border-b bg-gray-50 px-2 py-1 text-sm">
                                     <span class="ql-formats">
                                         <button class="ql-bold"></button>
@@ -315,16 +310,101 @@
                                     </span>
                                 </div>
 
-                                {{-- Hidden input (for form submission) --}}
                                 <input type="hidden" name="description" id="desc-html"
                                     value="{{ old('description', $event->description) }}">
 
-                                {{-- Quill editor container --}}
                                 <div id="desc-editor" class="min-h-[180px] bg-white overflow-y-auto"></div>
                             </div>
 
                             <p class="text-xs text-gray-500 mt-1">
                                 Format text, add links and lists. We’ll save the formatted content.
+                            </p>
+                        </div>
+                    </div>
+
+                    {{-- 🔐 Digital Pass settings (match create view) --}}
+                    <div class="mt-6 border-t pt-6">
+                        <h4 class="text-sm font-semibold text-gray-900">
+                            Digital Pass for this event
+                        </h4>
+                        <p class="mt-1 text-xs text-gray-500">
+                            Decide whether attendees can or must use their Eventib Digital Pass for check-in.
+                        </p>
+
+                        <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                            {{-- Off --}}
+                            <label class="flex items-start gap-2 border rounded-lg px-3 py-2 cursor-pointer
+                                          {{ $dpMode === 'off' ? 'border-indigo-500 bg-indigo-50/60' : 'border-gray-200' }}">
+                                <input type="radio" name="digital_pass_mode" value="off"
+                                       class="mt-1"
+                                       {{ $dpMode === 'off' ? 'checked' : '' }}>
+                                <div>
+                                    <div class="font-medium text-gray-900">Not used</div>
+                                    <p class="text-xs text-gray-500">
+                                        Normal QR / manual check-in only.
+                                    </p>
+                                </div>
+                            </label>
+
+                            {{-- Optional --}}
+                            <label class="flex items-start gap-2 border rounded-lg px-3 py-2 cursor-pointer
+                                          {{ $dpMode === 'optional' ? 'border-indigo-500 bg-indigo-50/60' : 'border-gray-200' }}">
+                                <input type="radio" name="digital_pass_mode" value="optional"
+                                       class="mt-1"
+                                       {{ $dpMode === 'optional' ? 'checked' : '' }}>
+                                <div>
+                                    <div class="font-medium text-gray-900">Optional</div>
+                                    <p class="text-xs text-gray-500">
+                                        Attendees can opt-in to use their voice / face pass.
+                                    </p>
+                                </div>
+                            </label>
+
+                            {{-- Required --}}
+                            <label class="flex items-start gap-2 border rounded-lg px-3 py-2 cursor-pointer
+                                          {{ $dpMode === 'required' ? 'border-indigo-500 bg-indigo-50/60' : 'border-gray-200' }}">
+                                <input type="radio" name="digital_pass_mode" value="required"
+                                       class="mt-1"
+                                       {{ $dpMode === 'required' ? 'checked' : '' }}>
+                                <div>
+                                    <div class="font-medium text-gray-900">Required</div>
+                                    <p class="text-xs text-gray-500">
+                                        Only attendees with an active Digital Pass can register.
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+
+                        @error('digital_pass_mode')
+                            <p class="mt-1 text-xs text-rose-600">{{ $message }}</p>
+                        @enderror
+
+                        <div class="mt-4">
+                            <label class="block text-xs font-medium text-gray-700 mb-1">
+                                Allowed Digital Pass methods
+                            </label>
+                            <div class="flex flex-wrap gap-4 text-sm">
+                                <label class="inline-flex items-center gap-2">
+                                    <input type="radio" name="digital_pass_methods" value="voice"
+                                           class="text-indigo-600 border-gray-300"
+                                           {{ $dpMethods === 'voice' ? 'checked' : '' }}>
+                                    <span>Voice only</span>
+                                </label>
+                                <label class="inline-flex items-center gap-2">
+                                    <input type="radio" name="digital_pass_methods" value="face"
+                                           class="text-indigo-600 border-gray-300"
+                                           {{ $dpMethods === 'face' ? 'checked' : '' }}>
+                                    <span>Face only</span>
+                                </label>
+                                <label class="inline-flex items-center gap-2">
+                                    <input type="radio" name="digital_pass_methods" value="both"
+                                           class="text-indigo-600 border-gray-300"
+                                           {{ $dpMethods === 'both' ? 'checked' : '' }}>
+                                    <span>Voice or face</span>
+                                </label>
+                            </div>
+                            <p class="mt-1 text-xs text-gray-500">
+                                We’ll enforce this later on the check-in screen. For now it’s stored with the event.
                             </p>
                         </div>
                     </div>
@@ -340,13 +420,11 @@
                 </div>
             </section>
 
-
             {{-- STEP 3 — Schedule & Media --}}
             <section x-show="step === 3" x-cloak class="space-y-6">
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-gray-900">Schedule</h3>
 
-                    {{-- Recurring toggle + summary --}}
                     <div class="mt-3 space-y-3">
                         <label class="inline-flex items-center gap-2">
                             <input
@@ -372,13 +450,11 @@
                         </div>
                     </div>
 
-                    {{-- Sessions --}}
                     <div id="sessions-wrapper" class="mt-4 space-y-4">
                         @if ($existingCount > 0)
                             @foreach ($existingSessions as $i => $s)
                                 @php $date = \Carbon\Carbon::parse($s->session_date); @endphp
                                 <div class="session-item rounded-lg border border-gray-200 bg-gray-50 p-4">
-
                                     <div class="flex items-center justify-between mb-3">
                                         <h4 class="text-sm font-medium text-gray-700">Session {{ $i + 1 }}</h4>
                                         <button type="button" class="remove-session text-sm text-rose-600 hover:text-rose-700">
@@ -421,7 +497,6 @@
                                 </div>
                             @endforeach
                         @else
-                            {{-- No sessions yet --}}
                             <div class="session-item rounded-lg border border-gray-200 bg-gray-50 p-4">
                                 <div class="flex items-center justify-between mb-3">
                                     <h4 class="text-sm font-medium text-gray-700">Session 1</h4>
@@ -446,14 +521,12 @@
                         @endif
                     </div>
 
-                    {{-- Add session button --}}
                     <button type="button" id="add-session"
                             class="mt-3 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700">
                         + Add another session
                     </button>
                 </div>
 
-                {{-- MEDIA --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-gray-900">Media</h3>
 
@@ -501,15 +574,12 @@
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 
     <script>
-        // Alpine state for the edit flow
         document.addEventListener('alpine:init', () => {
             Alpine.data('editEvent', (cfg) => ({
                 step: 1,
-
                 currencies: ['GBP','USD','CAD','AUD','INR','NGN','KES','GHS','EUR'],
-                pricing: cfg.defaultPaid ? 'paid' : 'free',            // locked: we never change this in UI
-                currency: (cfg.defaultCurrency || 'GBP').toUpperCase(),// locked: no input for this
-
+                pricing: cfg.defaultPaid ? 'paid' : 'free',
+                currency: (cfg.defaultCurrency || 'GBP').toUpperCase(),
                 country: '',
                 allMethods: cfg.methods || [],
                 eligibleMethods: [],
@@ -520,7 +590,6 @@
                     this.updateCountry();
                     this.refreshEligible();
 
-                    // watchers are harmless (currency/pricing aren't editable in UI)
                     this.$watch('currency', () => { this.updateCountry(); this.refreshEligible(); });
                     this.$watch('pricing',  () => { this.refreshEligible(); });
                 },
@@ -551,7 +620,6 @@
                         return;
                     }
 
-                    // keep existing payout if still valid, otherwise default to first
                     const stillValid = this.eligibleMethods.find(m => m.id === this.chosenMethodId);
                     if (!stillValid) {
                         this.chosenMethodId = this.eligibleMethods[0].id;
@@ -570,7 +638,6 @@
             }));
         });
 
-        // Tags
         document.addEventListener("DOMContentLoaded", function () {
             new TomSelect("#tags", {
                 plugins: ['remove_button'],
@@ -582,7 +649,6 @@
             });
         });
 
-        // Sessions UI (mark-for-delete supported)
         (function () {
             const wrapper = document.getElementById('sessions-wrapper');
             const addBtn  = document.getElementById('add-session');
@@ -637,7 +703,6 @@
             renumber();
         })();
 
-        // Ticket types UI add/remove (for when you *do* show pricing on edit; harmless otherwise)
         (function () {
             const wrap = document.getElementById('cat-rows');
             const tpl  = document.getElementById('cat-tpl')?.innerHTML || '';
@@ -672,7 +737,6 @@
             wireRemove();
         })();
 
-        // Google Places
         window.initPlaces = function () {
             const input = document.getElementById('location-input');
             if (!input || !window.google || !google.maps || !google.maps.places) return;
@@ -711,10 +775,10 @@
             max-height: 400px;
             padding: 0.75rem 1rem;
             font-size: 0.95rem;
-            color: #111827; /* text-gray-900 */
+            color: #111827;
         }
         #desc-editor .ql-editor.ql-blank::before {
-            color: #9ca3af; /* text-gray-400 */
+            color: #9ca3af;
             font-style: italic;
             content: attr(data-placeholder);
         }
@@ -735,13 +799,11 @@
                 modules: { toolbar: toolbar },
             });
 
-            // Prefill existing HTML content
             const existing = hidden.value || '';
             if (existing.trim() !== '') {
                 quill.clipboard.dangerouslyPasteHTML(existing);
             }
 
-            // Sync to hidden field on change
             quill.on('text-change', function () {
                 hidden.value = quill.root.innerHTML.trim();
             });

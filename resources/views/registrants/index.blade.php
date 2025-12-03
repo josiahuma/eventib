@@ -57,22 +57,6 @@
                </div>
             </div>
 
-            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
-                <div>
-                    <div class="text-sm text-gray-500">Event type</div>
-                    <div class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full
-                        {{ $isPaidEvent ? 'bg-black/80 text-white' : 'bg-emerald-500 text-white' }}">
-                        {{ $isPaidEvent ? 'Paid event' : 'Free event' }}
-                    </div>
-                    <div class="mt-2 text-xs text-gray-400">
-                        <a href="{{ route('tickets.scan.page', $event) }}"
-                            class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100">
-                            Scan tickets
-                        </a>
-                    </div>
-                </div>
-            </div>
-
             @php
                 // New: enable button by current available funds (even if something is processing)
                 $disablePayout = !$isPaidEvent || $availableMinor <= 0;
@@ -106,16 +90,7 @@
                     @endif
                 </div>
 
-                <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {{-- Email registrants --}}
-                    <a href="{{ route('events.registrants.email', $event) }}"
-                       class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M2.25 6.75A2.25 2.25 0 014.5 4.5h15a2.25 2.25 0 012.25 2.25v10.5A2.25 2.25 0 0119.5 19.5h-15A2.25 2.25 0 012.25 17.25V6.75zm2.72-.75l6.53 4.35a.75.75 0 00.8 0l6.53-4.35H4.97z"/>
-                        </svg>
-                        Email registrants
-                    </a>
-
+                <div class="mt-3">                    
                     {{-- Request payout (enabled if availableMinor > 0) --}}
                     <form method="GET" action="{{ route('payouts.create', $event) }}" class="w-full">
                         <input type="hidden" name="amount" value="{{ $availableMinor }}">
@@ -131,6 +106,25 @@
                             Request payout
                         </button>
                     </form>
+                </div>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                <div>
+                    <div class="text-sm text-gray-500">Event type</div>
+                    <div class="mt-1 inline-flex items-center px-2 py-0.5 rounded-full
+                        {{ $isPaidEvent ? 'bg-black/80 text-white' : 'bg-emerald-500 text-white' }}">
+                        {{ $isPaidEvent ? 'Paid event' : 'Free event' }}
+                    </div>
+                    <div class="mt-2 text-xs text-gray-400">
+                        {{-- Email registrants --}}
+                        <a href="{{ route('events.registrants.email', $event) }}"
+                            class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100">
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M2.25 6.75A2.25 2.25 0 014.5 4.5h15a2.25 2.25 0 012.25 2.25v10.5A2.25 2.25 0 0119.5 19.5h-15A2.25 2.25 0 012.25 17.25V6.75zm2.72-.75l6.53 4.35a.75.75 0 00.8 0l6.53-4.35H4.97z"/>
+                            </svg>
+                            Email registrants
+                        </a>
+                    </div>
                 </div>
             </div>
 

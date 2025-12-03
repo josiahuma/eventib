@@ -47,7 +47,7 @@
                                 <div class="my-1 border-t border-gray-100"></div>
                             @endif
                             <x-dropdown-link :href="route('profile.edit')">Profile</x-dropdown-link>
-                            <x-dropdown-link :href="route('my.tickets')">My Tickets</x-dropdown-link>
+                            <x-dropdown-link :href="route('digital-pass.setup')">Digital Pass</x-dropdown-link>
                             <x-dropdown-link :href="route('profile.payouts')">Add Payout methods</x-dropdown-link>
                             @if(Auth::user()->is_admin || !Auth::user()->organizer)
                                 <x-dropdown-link :href="route('organizers.create')">
@@ -144,6 +144,7 @@
                                 </x-responsive-nav-link>
                             @endif
                             <x-responsive-nav-link :href="route('profile.edit')">Profile</x-responsive-nav-link>
+                            <x-responsive-nav-link :href="route('digital-pass.setup')">Digital Pass</x-responsive-nav-link>
                             <x-responsive-nav-link :href="route('profile.payouts')">Add Payout methods</x-responsive-nav-link>
                             @if(Auth::user()->is_admin || !Auth::user()->organizer)
                                 <x-responsive-nav-link :href="route('organizers.create')">Create Organizer</x-responsive-nav-link>

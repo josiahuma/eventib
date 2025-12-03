@@ -95,7 +95,24 @@
                                 <div class="font-medium text-gray-900 truncate">{{ $reg?->name ?? '—' }}</div>
                                 <div class="text-sm text-gray-600 truncate">{{ $reg?->email ?? '—' }}</div>
                                 <div class="text-xs text-gray-500 mt-1">Sessions: {{ $sess }}</div>
+
+                                @if($reg && $reg->uses_digital_pass)
+                                    @php
+                                        $method = $reg->digital_pass_method ?: 'any';
+                                        $label  = match($method) {
+                                            'voice' => 'Voice',
+                                            'face'  => 'Face',
+                                            default => 'Voice or face',
+                                        };
+                                    @endphp
+                                    <div class="mt-1">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-700">
+                                            Digital pass: {{ $label }}
+                                        </span>
+                                    </div>
+                                @endif
                             </div>
+
                             <div class="md:col-span-3">
                                 <div class="text-sm text-gray-500">Checked-in</div>
                                 <div class="font-medium text-gray-900">
@@ -124,7 +141,24 @@
                                 <div class="font-medium text-gray-900 truncate">{{ $row->name ?? '—' }}</div>
                                 <div class="text-sm text-gray-600 truncate">{{ $row->email ?? '—' }}</div>
                                 <div class="text-xs text-gray-500 mt-1">Sessions: {{ $sess }}</div>
+
+                                @if($row->uses_digital_pass)
+                                    @php
+                                        $method = $row->digital_pass_method ?: 'any';
+                                        $label  = match($method) {
+                                            'voice' => 'Voice',
+                                            'face'  => 'Face',
+                                            default => 'Voice or face',
+                                        };
+                                    @endphp
+                                    <div class="mt-1">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-700">
+                                            Digital pass: {{ $label }}
+                                        </span>
+                                    </div>
+                                @endif
                             </div>
+
                             <div class="md:col-span-2">
                                 <div class="text-sm text-gray-500">Party</div>
                                 <div class="font-medium text-gray-900">{{ $party }}</div>

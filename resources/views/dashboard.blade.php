@@ -47,6 +47,12 @@
                             : null;
                         // --- end next-date logic ---
 
+                        // ✅ Any future sessions?
+                        $hasFutureSession = $sessions->contains(function ($s) use ($now) {
+                            return $s->session_date
+                                && \Illuminate\Support\Carbon::parse($s->session_date)->gte($now);
+                        });
+
                         $raw = $event->tags;
                         $tags = [];
                         if (is_array($raw)) {
@@ -268,6 +274,31 @@
                                     </template>
                                 </div>
                             </div>
+                            {{-- Big check-in button for organisers --}}
+                            <div class="mt-4">
+                                @if($hasFutureSession)
+                                    <a href="{{ route('events.checkin', $event) }}"
+                                    class="inline-flex w-full justify-center items-center gap-2 px-4 py-2.5
+                                            rounded-xl bg-emerald-600 text-white text-sm font-semibold
+                                            hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
+                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                            <path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2zm-1 14-4-4 1.414-1.414L11 13.172l4.586-4.586L17 10z"/>
+                                        </svg>
+                                        <span>Check-in attendees</span>
+                                    </a>
+                                @else
+                                    <button type="button" disabled
+                                            class="inline-flex w-full justify-center items-center gap-2 px-4 py-2.5
+                                                rounded-xl bg-emerald-100 text-emerald-400 text-sm font-semibold
+                                                cursor-not-allowed border border-emerald-100">
+                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                            <path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2zm-1 14-4-4 1.414-1.414L11 13.172l4.586-4.586L17 10z"/>
+                                        </svg>
+                                        <span>Check-in closed (event ended)</span>
+                                    </button>
+                                @endif
+                            </div>
+
 
                         </div>
                     </div>

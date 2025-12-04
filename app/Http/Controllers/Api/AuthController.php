@@ -68,44 +68,56 @@ class AuthController extends Controller
     public function loginWithGoogle(Request $request)
     {
         $data = $request->validate([
-            'id_token' => ['required', 'string'],
+            'code' => ['required', 'string'],
+            'redirect_uri' => ['required', 'string'],
         ]);
 
-        $client = new Google_Client(['android_client_id' => config('services.google.android_client_id')]);
-        $payload = $client->verifyIdToken($data['id_token']);
+        $client = new \GuzzleHttp\Client();
 
+        // Exchange the "code" for tokens
+        $tokenResponse = $client->post('https://oauth2.googleapis.com/token', [
+            'form_params' => [
+                'client_id' => config('services.google.android_client_id'),
+                'client_secret' => config('services.google.client_secret'),
+                'code' => $data['code'],
+                'redirect_uri' => $data['redirect_uri'],
+                'grant_type' => 'authorization_code',
+            ],
+        ]);
+
+        $tokens = json_decode($tokenResponse->getBody(), true);
+
+        $idToken = $tokens['id_token'] ?? null;
+        if (!$idToken) {
+            return response()->json(['message' => 'Google did not return id_token'], 422);
+        }
+
+        $payload = (new Google_Client())->verifyIdToken($idToken);
         if (!$payload) {
             return response()->json(['message' => 'Invalid Google token'], 422);
         }
 
-        $googleEmail = $payload['email'] ?? null;
-        $googleName  = $payload['name']  ?? null;
+        $email = $payload['email'] ?? null;
 
-        if (!$googleEmail) {
-            return response()->json(['message' => 'Google account has no email'], 422);
+        if (!$email) {
+            return response()->json(['message' => 'Email missing'], 422);
         }
 
-        // Find or create user
-        $user = User::where('email', $googleEmail)->first();
-
-        if (!$user) {
-            $user = User::create([
-                'name'     => $googleName ?: $googleEmail,
-                'email'    => $googleEmail,
-                'password' => bcrypt(str()->random(32)), // random password, they won’t use it
-            ]);
-        }
+        $user = User::firstOrCreate(
+            ['email' => $email],
+            [
+                'name' => $payload['name'] ?? $email,
+                'password' => bcrypt(str()->random(32)),
+            ]
+        );
 
         $token = $user->createToken('eventib-mobile-google')->plainTextToken;
 
         return response()->json([
             'token' => $token,
-            'user'  => [
-                'id'    => $user->id,
-                'name'  => $user->name,
-                'email' => $user->email,
-            ],
+            'user'  => $user,
         ]);
     }
+
     
 }

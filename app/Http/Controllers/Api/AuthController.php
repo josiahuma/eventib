@@ -1,7 +1,8 @@
 <?php
 
 namespace App\Http\Controllers\Api;
-
+use Google_Client;
+use App\Models\User;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -63,4 +64,48 @@ class AuthController extends Controller
 
         return response()->json($user);
     }
+
+    public function loginWithGoogle(Request $request)
+    {
+        $data = $request->validate([
+            'id_token' => ['required', 'string'],
+        ]);
+
+        $client = new Google_Client(['android_client_id' => config('services.google.android_client_id')]);
+        $payload = $client->verifyIdToken($data['id_token']);
+
+        if (!$payload) {
+            return response()->json(['message' => 'Invalid Google token'], 422);
+        }
+
+        $googleEmail = $payload['email'] ?? null;
+        $googleName  = $payload['name']  ?? null;
+
+        if (!$googleEmail) {
+            return response()->json(['message' => 'Google account has no email'], 422);
+        }
+
+        // Find or create user
+        $user = User::where('email', $googleEmail)->first();
+
+        if (!$user) {
+            $user = User::create([
+                'name'     => $googleName ?: $googleEmail,
+                'email'    => $googleEmail,
+                'password' => bcrypt(str()->random(32)), // random password, they won’t use it
+            ]);
+        }
+
+        $token = $user->createToken('eventib-mobile-google')->plainTextToken;
+
+        return response()->json([
+            'token' => $token,
+            'user'  => [
+                'id'    => $user->id,
+                'name'  => $user->name,
+                'email' => $user->email,
+            ],
+        ]);
+    }
+    
 }

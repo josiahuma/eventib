@@ -7,6 +7,9 @@ use App\Http\Controllers\Api\MobileCheckInController;
 use App\Http\Controllers\VoiceCheckController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:20,1');
+Route::post('/login/google', [AuthController::class, 'loginWithGoogle'])
+    ->middleware('throttle:20,1');
+
 
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);

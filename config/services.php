@@ -42,8 +42,9 @@ return [
 
     'google' => [
         'client_id' => env('GOOGLE_CLIENT_ID'),
-        'android_client_id' => env('GOOGLE_OAUTH_ANDROID_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'android_client_id' => env('GOOGLE_OAUTH_ANDROID_CLIENT_ID'),
+        'android_client_secret' => env('GOOGLE_ANDROID_CLIENT_SECRET'),
         'redirect' => null, //set in controller
         'maps_key' => env('GOOGLE_MAPS_API_KEY'),
     ],

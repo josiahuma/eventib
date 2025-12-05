@@ -68,46 +68,33 @@ class AuthController extends Controller
     public function loginWithGoogle(Request $request)
     {
         $data = $request->validate([
-            'code' => ['required', 'string'],
-            'redirect_uri' => ['required', 'string'],
+            'id_token' => ['required', 'string'],
         ]);
 
-        $client = new \GuzzleHttp\Client();
-
-        // Exchange the "code" for tokens
-        $tokenResponse = $client->post('https://oauth2.googleapis.com/token', [
-            'form_params' => [
-                'client_id' => config('services.google.android_client_id'),
-                'client_secret' => config('services.google.client_secret'),
-                'code' => $data['code'],
-                'redirect_uri' => $data['redirect_uri'],
-                'grant_type' => 'authorization_code',
-            ],
+        // Verify the ID token from Expo
+        $client = new Google_Client([
+            'client_id' => config('services.google.android_client_id'), // ✅ Web client ID
         ]);
 
-        $tokens = json_decode($tokenResponse->getBody(), true);
+        $payload = $client->verifyIdToken($data['id_token']);
 
-        $idToken = $tokens['id_token'] ?? null;
-        if (!$idToken) {
-            return response()->json(['message' => 'Google did not return id_token'], 422);
-        }
-
-        $payload = (new Google_Client())->verifyIdToken($idToken);
         if (!$payload) {
             return response()->json(['message' => 'Invalid Google token'], 422);
         }
 
-        $email = $payload['email'] ?? null;
+        $googleEmail = $payload['email'] ?? null;
+        $googleName  = $payload['name']  ?? null;
 
-        if (!$email) {
-            return response()->json(['message' => 'Email missing'], 422);
+        if (!$googleEmail) {
+            return response()->json(['message' => 'Google account has no email'], 422);
         }
 
+        // Find or create user
         $user = User::firstOrCreate(
-            ['email' => $email],
+            ['email' => $googleEmail],
             [
-                'name' => $payload['name'] ?? $email,
-                'password' => bcrypt(str()->random(32)),
+                'name'     => $googleName ?: $googleEmail,
+                'password' => bcrypt(str()->random(32)), // random, they won’t use it
             ]
         );
 
@@ -115,9 +102,14 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user'  => $user,
+            'user'  => [
+                'id'    => $user->id,
+                'name'  => $user->name,
+                'email' => $user->email,
+            ],
         ]);
     }
+
 
     
 }

@@ -1,322 +1,142 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex items-center justify-between">
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Dashboard</h2>
-            <a href="{{ route('events.create') }}"
-               class="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/>
-                </svg>
-                Create Event
-            </a>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                Organiser Dashboard
+            </h2>
         </div>
     </x-slot>
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        @if (session('success'))
-            <div class="mb-4 p-3 rounded-lg bg-green-50 text-green-700 border border-green-200">
-                {{ session('success') }}
-            </div>
-        @endif
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {{-- Top buttons --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <a href="{{ route('events.create') }}"
+               class="flex items-center justify-center px-4 py-3 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+                Create Events
+            </a>
 
-        @if ($events->count())
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                @foreach ($events as $event)
-                    @php
-                        $image = $event->banner_url
-                            ? asset('storage/' . $event->banner_url)
-                            : ($event->avatar_url ? asset('storage/' . $event->avatar_url) : null);
+            <a href="{{ route('events.manage') }}"
+               class="flex items-center justify-center px-4 py-3 rounded-xl bg-gray-900 text-white text-sm font-semibold hover:bg-black">
+                Manage Events
+            </a>
 
-                        // --- NEW: compute the next upcoming session date ---
-                        $sessions = $event->sessions ?? collect();
-                        $now      = \Illuminate\Support\Carbon::now();
+            <a href="{{ route('dashboard.report', ['year' => $year, 'metric' => $metric]) }}"
+               class="flex items-center justify-center px-4 py-3 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
+                Download Report (PDF)
+            </a>
 
-                        // earliest session that is now or in the future
-                        $nextSession = $sessions
-                            ->filter(fn ($s) => $s->session_date && \Illuminate\Support\Carbon::parse($s->session_date)->gte($now))
-                            ->sortBy('session_date')
-                            ->first();
+            {{-- Update this href when your scanner app link is ready --}}
+            <a href="{{ route('organizerapp') }}"
+               class="flex items-center justify-center px-4 py-3 rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900">
+                Download Eventib Scanner App
+            </a>
+        </div>
 
-                        // if no future sessions, fall back to the latest past one
-                        if (! $nextSession && $sessions->isNotEmpty()) {
-                            $nextSession = $sessions->sortByDesc('session_date')->first();
-                        }
+        {{-- Filters --}}
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <form method="GET" action="{{ route('dashboard') }}" class="flex flex-wrap items-center gap-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Year</label>
+                    <select name="year"
+                            class="rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        @foreach($availableYears as $y)
+                            <option value="{{ $y }}" @selected($y == $year)>{{ $y }}</option>
+                        @endforeach
+                    </select>
+                </div>
 
-                        $nextDate = $nextSession
-                            ? \Illuminate\Support\Carbon::parse($nextSession->session_date)
-                            : null;
-                        // --- end next-date logic ---
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Metric</label>
+                    <select name="metric"
+                            class="rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="attendees" @selected($metric === 'attendees')>Total registered attendees</option>
+                        <option value="events" @selected($metric === 'events')>Number of events posted</option>
+                        <option value="earnings" @selected($metric === 'earnings')>Total earnings</option>
+                        <option value="checkins" @selected($metric === 'checkins')>Total check-ins</option>
+                    </select>
+                </div>
 
-                        // ✅ Any future sessions?
-                        $hasFutureSession = $sessions->contains(function ($s) use ($now) {
-                            return $s->session_date
-                                && \Illuminate\Support\Carbon::parse($s->session_date)->gte($now);
-                        });
+                <div class="pt-5">
+                    <button type="submit"
+                            class="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">
+                        Apply
+                    </button>
+                </div>
+            </form>
+        </div>
 
-                        $raw = $event->tags;
-                        $tags = [];
-                        if (is_array($raw)) {
-                            $tags = $raw;
-                        } elseif (is_string($raw) && $raw !== '') {
-                            $decoded = json_decode($raw, true);
-                            $tags = (json_last_error() === JSON_ERROR_NONE && is_array($decoded))
-                                ? $decoded
-                                : array_filter(array_map('trim', preg_split('/[,;]+/', $raw)));
-                        }
-                    @endphp
-
-                    <div class="bg-white rounded-2xl overflow-hidden shadow-sm ring-1 ring-gray-200">
-                        <div class="relative">
-                            @if ($image)
-                                <img src="{{ $image }}" alt="{{ $event->name }}" class="h-40 w-full object-cover" loading="lazy" decoding="async">
-                            @else
-                                <div class="h-40 w-full bg-gradient-to-br from-slate-200 to-slate-100 flex items-center justify-center">
-                                    <span class="text-slate-500 text-sm">No image</span>
-                                </div>
-                            @endif
-
-                            @if ($event->is_promoted ?? false)
-                                <span class="absolute top-3 left-3 bg-amber-500/95 text-white text-xs font-semibold px-2.5 py-1 rounded-md shadow">
-                                    Promoted
-                                </span>
-                            @endif
-
-                            @php
-                                // Active categories and paid detection
-                                $activeCats = $event->relationLoaded('categories')
-                                    ? $event->categories->where('is_active', true)
-                                    : collect();
-
-                                $paidCats = $activeCats->filter(fn($c) => (float) $c->price > 0);
-                                $hasPaidCategories = $paidCats->isNotEmpty();
-
-                                $isPaidSingle = (float) ($event->ticket_cost ?? 0) > 0;
-                                $isPaidEvent  = $hasPaidCategories || $isPaidSingle;
-                                $isFree       = ! $isPaidEvent;
-
-                                $cur = strtoupper($event->ticket_currency ?? 'GBP');
-                                $symbols = [
-                                    'GBP'=>'£','USD'=>'$','EUR'=>'€','NGN'=>'₦','KES'=>'KSh','GHS'=>'₵','ZAR'=>'R',
-                                    'CAD'=>'$','AUD'=>'$','NZD'=>'$','INR'=>'₹','JPY'=>'¥','CNY'=>'¥'
-                                ];
-                                $sym = $symbols[$cur] ?? '';
-
-                                if ($hasPaidCategories) {
-                                    $min = (float) $paidCats->min('price');
-                                    $max = (float) $paidCats->max('price');
-                                    $fmt = fn($v) => $sym ? ($sym . number_format($v, 2)) : ($cur . ' ' . number_format($v, 2));
-                                    $priceLabel = ($min === $max) ? $fmt($min) : ($fmt($min) . '–' . $fmt($max));
-                                } elseif ($isPaidSingle) {
-                                    $priceLabel = $sym ? $sym . number_format($event->ticket_cost, 2)
-                                                       : $cur . ' ' . number_format($event->ticket_cost, 2);
-                                } else {
-                                    $priceLabel = 'Free';
-                                }
-                            @endphp
-
-                            <span class="absolute top-3 right-3 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold
-                                {{ $isFree ? 'bg-emerald-500 text-white' : 'bg-black/80 text-white' }}">
-                                {{ $priceLabel }}
-                            </span>
-                        </div>
-
-                        <div class="p-4">
-                            <div class="flex items-start justify-between gap-3">
-                                <div>
-                                    <h3 class="text-base font-semibold text-gray-900">{{ $event->name }}</h3>
-                                    @if($event->category)
-                                        <p class="text-xs text-gray-500 mt-0.5">{{ $event->category }}</p>
-                                    @endif
-                                </div>
-                                <div class="text-right">
-                                    @php
-                                        // Use the eager-loaded, status-filtered relation
-                                        $regs = $event->relationLoaded('registrations') ? $event->registrations : collect();
-
-                                        if ($isPaidEvent) {
-                                            // Count tickets (quantities) for completed rows
-                                            $totalUnits = $regs->sum(fn ($r) => max(1, (int) ($r->quantity ?? 1)));
-                                            $unitLabel  = 'tickets';
-                                        } else {
-                                            // Free events: count total attendees = registrant + guests
-                                            $totalUnits = $regs->sum(function ($r) {
-                                                $ad = max(0, (int) ($r->party_adults ?? 0));
-                                                $ch = max(0, (int) ($r->party_children ?? 0));
-                                                return 1 + $ad + $ch;
-                                            });
-                                            $unitLabel = 'attendees';
-                                        }
-                                    @endphp
-
-                                    <div class="text-xs text-gray-500">Registrations</div>
-                                    <div class="text-sm font-semibold text-gray-900">
-                                        {{ number_format($totalUnits) }}
-                                        <span class="text-xs text-gray-500">({{ $unitLabel }})</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            @if ($event->location)
-                                <div class="mt-2 flex items-center text-sm text-gray-600 gap-2">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M12 2C8.686 2 6 4.686 6 8c0 4.418 6 12 6 12s6-7.582 6-12c0-3.314-2.686-6-6-6zm0 8.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/>
-                                    </svg>
-                                    <span class="line-clamp-1">{{ $event->location }}</span>
-                                </div>
-                            @endif
-
-                            <div class="mt-1 flex items-center text-sm text-gray-600 gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v3H3V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1z"/>
-                                    <path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/>
-                                </svg>
-                                @if ($nextDate)
-                                    <span>Next: {{ $nextDate->format('D, d M Y · g:ia') }}</span>
-                                @else
-                                    <span>No sessions yet</span>
-                                @endif
-                            </div>
-
-                            @if (!empty($tags))
-                                <div class="mt-2 flex flex-wrap gap-1.5">
-                                    @foreach ($tags as $tag)
-                                        <span class="px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 border border-blue-100">#{{ $tag }}</span>
-                                    @endforeach
-                                </div>
-                            @endif
-
-                            <div class="mt-4 flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <a href="{{ route('events.show', $event) }}"
-                                       class="inline-flex items-center px-3 py-1.5 text-sm rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800">
-                                        View
-                                    </a>
-                                    <a href="{{ route('events.edit', $event) }}"
-                                       class="inline-flex items-center px-3 py-1.5 text-sm rounded-md bg-indigo-600 hover:bg-indigo-700 text-white">
-                                        Edit
-                                    </a>
-                                </div>
-
-                                @php
-                                    $isFreeSimple = ($event->ticket_cost ?? 0) == 0;
-                                    $cur = strtoupper($event->ticket_currency ?? 'GBP');
-                                    $symbols = [
-                                        'GBP' => '£','USD' => '$','EUR' => '€','NGN' => '₦','KES' => 'KSh',
-                                        'GHS' => '₵','ZAR' => 'R','CAD' => '$','AUD' => '$','NZD' => '$',
-                                        'INR' => '₹','JPY' => '¥','CNY' => '¥'
-                                    ];
-                                    $sym = $symbols[$cur] ?? '';
-                                    $priceLabelSimple = $isFreeSimple
-                                        ? 'Free'
-                                        : ($sym ? $sym.number_format($event->ticket_cost, 2) : $cur.' '.number_format($event->ticket_cost, 2));
-                                    $isUnlocked = optional($event->unlocks->first())->unlocked_at !== null;
-                                @endphp
-
-                                @if(!$isFreeSimple || $isUnlocked)
-                                    <a href="{{ route('events.registrants', $event) }}"
-                                       class="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700">
-                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M12 2a5 5 0 00-5 5v2H6a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2h-1V7a5 5 0 00-5-5zm-3 7V7a3 3 0 0 1 6 0v2H9z"/>
-                                        </svg>
-                                        View registrants
-                                    </a>
-                                @else
-                                    <a href="{{ route('events.registrants.unlock', $event) }}"
-                                       class="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200">
-                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M12 2a4 4 0 00-4 4v2H7a2 2 0 00-2 2v9a2 2 0 002 2h10a2 2 0 002-2v-9a2 2 0 00-2-2h-1V6a4 4 0 00-8 0v2h2V6a2 2 0 1 1 4 0v2h-4z"/>
-                                        </svg>
-                                        View registrants
-                                    </a>
-                                @endif
-
-                                {{-- Delete button with confirmation modal --}}
-                                <div x-data="{ open: false }">
-                                    <button @click="open = true"
-                                            class="inline-flex items-center px-3 py-1.5 text-sm rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700">
-                                        Delete
-                                    </button>
-
-                                    <template x-teleport="body">
-                                        <div x-show="open" x-transition.opacity x-trap.noscroll="open"
-                                             class="fixed inset-0 z-50">
-                                            <div class="absolute inset-0 bg-black/40" @click="open = false" aria-hidden="true"></div>
-
-                                            <div class="absolute inset-0 flex items-center justify-center p-4">
-                                                <div class="w-full max-w-md rounded-xl bg-white shadow-xl p-6"
-                                                     role="dialog" aria-modal="true" aria-labelledby="delTitle">
-                                                    <h3 id="delTitle" class="text-base font-semibold text-gray-900">
-                                                        Delete this event?
-                                                    </h3>
-                                                    <p class="mt-2 text-sm text-gray-600">
-                                                        This action cannot be undone.
-                                                    </p>
-
-                                                    <div class="mt-6 flex justify-end gap-3">
-                                                        <button type="button"
-                                                                @click="open = false"
-                                                                class="px-3 py-1.5 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50">
-                                                            Cancel
-                                                        </button>
-
-                                                        <form method="POST" action="{{ route('events.destroy', $event) }}">
-                                                            @csrf
-                                                            @method('DELETE')
-                                                            <button type="submit"
-                                                                    class="px-3 py-1.5 text-sm rounded-md bg-rose-600 text-white hover:bg-rose-700">
-                                                                Yes, delete
-                                                            </button>
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </template>
-                                </div>
-                            </div>
-                            {{-- Big check-in button for organisers --}}
-                            <div class="mt-4">
-                                @if($hasFutureSession)
-                                    <a href="{{ route('events.checkin', $event) }}"
-                                    class="inline-flex w-full justify-center items-center gap-2 px-4 py-2.5
-                                            rounded-xl bg-emerald-600 text-white text-sm font-semibold
-                                            hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
-                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                            <path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2zm-1 14-4-4 1.414-1.414L11 13.172l4.586-4.586L17 10z"/>
-                                        </svg>
-                                        <span>Check-in attendees</span>
-                                    </a>
-                                @else
-                                    <button type="button" disabled
-                                            class="inline-flex w-full justify-center items-center gap-2 px-4 py-2.5
-                                                rounded-xl bg-emerald-100 text-emerald-400 text-sm font-semibold
-                                                cursor-not-allowed border border-emerald-100">
-                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                            <path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2zm-1 14-4-4 1.414-1.414L11 13.172l4.586-4.586L17 10z"/>
-                                        </svg>
-                                        <span>Check-in closed (event ended)</span>
-                                    </button>
-                                @endif
-                            </div>
-
-
-                        </div>
-                    </div>
-                @endforeach
+        {{-- KPI cards --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <div class="text-xs uppercase tracking-wide text-gray-500">Events posted ({{ $year }})</div>
+                <div class="mt-2 text-2xl font-bold text-gray-900">{{ number_format($eventsCount) }}</div>
             </div>
 
-            <div class="mt-8">
-                {{ $events->links() }}
+            <div class="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <div class="text-xs uppercase tracking-wide text-gray-500">Total earnings ({{ $year }})</div>
+                <div class="mt-2 text-2xl font-bold text-gray-900">
+                    £{{ number_format($totalEarnings / 100, 2) /* if stored in pence; adjust if not */ }}
+                </div>
             </div>
-        @else
-            <div class="bg-white rounded-2xl border border-dashed border-gray-300 p-12 text-center">
-                <h3 class="text-lg font-semibold text-gray-800">You haven’t created any events yet</h3>
-                <p class="mt-1 text-sm text-gray-500">Create your first event to get started.</p>
-                <a href="{{ route('events.create') }}"
-                   class="mt-4 inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
-                    + Create Event
-                </a>
+
+            <div class="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <div class="text-xs uppercase tracking-wide text-gray-500">Registered attendees ({{ $year }})</div>
+                <div class="mt-2 text-2xl font-bold text-gray-900">{{ number_format($totalAttendees) }}</div>
             </div>
-        @endif
+
+            <div class="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                <div class="text-xs uppercase tracking-wide text-gray-500">Total check-ins ({{ $year }})</div>
+                <div class="mt-2 text-2xl font-bold text-gray-900">{{ number_format($totalCheckins) }}</div>
+            </div>
+        </div>
+
+        {{-- Bar chart --}}
+        <div class="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-semibold text-gray-900">
+                    @switch($metric)
+                        @case('events') Events per month @break
+                        @case('earnings') Earnings per month @break
+                        @case('checkins') Check-ins per month @break
+                        @default Registered attendees per month
+                    @endswitch
+                    – {{ $year }}
+                </h3>
+            </div>
+
+            {{-- Fixed-height container so Chart.js can’t grow infinitely --}}
+            <div class="relative h-64">
+                <canvas id="kpiChart" class="absolute inset-0 w-full h-full"></canvas>
+            </div>
+        </div>
+
     </div>
+
+    {{-- Chart.js --}}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const ctx = document.getElementById('kpiChart').getContext('2d');
+            const data = @json($chartData);
+            const labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: '{{ ucfirst($metric) }}',
+                        data: data,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        });
+    </script>
 </x-app-layout>

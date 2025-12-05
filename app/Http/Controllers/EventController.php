@@ -5,16 +5,19 @@ namespace App\Http\Controllers;
 use Carbon\Carbon;
 use App\Models\Event;
 use App\Models\EventSession;
+use App\Models\HomepageSponsor;
+use App\Models\HomepageSlide;
+use App\Models\EventRegistration;
+use App\Models\EventPayout;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Mail;
-use App\Mail\EventCreatedMail;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use App\Mail\EventCreatedMail;
 use App\Mail\OrganizerNewEventMail;
-use App\Models\HomepageSponsor;
-use App\Models\HomepageSlide;
-
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class EventController extends Controller
 {
@@ -110,20 +113,311 @@ class EventController extends Controller
     }
 
 
-    public function dashboard()
+    public function dashboard(Request $request)
     {
-        $events = Event::where('user_id', Auth::id())
-            ->with([
-                'registrations' => fn ($q) => $q->whereIn('status', ['paid', 'free'])->latest(),
-                'categories'    => fn ($q) => $q->select('id','event_id','price','is_active','sort'),
-                'unlocks'       => fn ($q) => $q->where('user_id', Auth::id()),
-            ])
-            ->withMin('sessions', 'session_date')
-            ->latest()
-            ->paginate(12);
+        $user = $request->user();
 
-        return view('dashboard', compact('events'));
+        // Make sure the user has an organiser profile
+        if (! $user->organizer) {
+            return redirect()
+                ->route('organizers.create')
+                ->with('error', 'Please create an organizer profile to view your dashboard.');
+        }
+
+        $organizer   = $user->organizer;
+        $currentYear = now()->year;
+        $year        = (int) $request->input('year', $currentYear);
+
+        // Which KPI is shown in the bar chart: attendees|events|earnings|checkins
+        $metric = $request->input('metric', 'attendees');
+
+        /*
+        |--------------------------------------------------------------------------
+        | 1. Top-level KPIs
+        |--------------------------------------------------------------------------
+        */
+
+        // 1) Number of events posted in the selected year
+        $eventsThisYear = Event::where('organizer_id', $organizer->id)
+            ->whereYear('created_at', $year);
+
+        $eventsCount = (clone $eventsThisYear)->count();
+
+        // 2) Total earnings from payouts (EventPayout.amount is in minor units / pence)
+        $payoutsQuery = EventPayout::whereHas('event', function ($q) use ($organizer) {
+                $q->where('organizer_id', $organizer->id);
+            })
+            ->where('status', 'paid')
+            ->whereYear('created_at', $year);
+
+        $totalEarnings = (int) $payoutsQuery->sum('amount'); // minor units
+
+        // 3) Total registered attendees (registrant + party) in the selected year
+        $registrationsQuery = EventRegistration::whereHas('event', function ($q) use ($organizer) {
+                $q->where('organizer_id', $organizer->id);
+            })
+            ->whereYear('created_at', $year);
+
+        $registrations = $registrationsQuery->get();
+
+        $totalAttendees = $registrations->sum(function ($r) {
+            $adults   = max(0, (int) $r->party_adults);
+            $children = max(0, (int) $r->party_children);
+            return 1 + $adults + $children;
+        });
+
+        // 4) Total check-ins (registrations with a check-in timestamp)
+        $totalCheckins = EventRegistration::whereHas('event', function ($q) use ($organizer) {
+                $q->where('organizer_id', $organizer->id);
+            })
+            ->whereNotNull('checked_in_at')
+            ->whereYear('checked_in_at', $year)
+            ->count();
+
+        /*
+        |--------------------------------------------------------------------------
+        | 2. Monthly chart data for selected metric
+        |--------------------------------------------------------------------------
+        */
+
+        // 1-based index (Jan = 1 .. Dec = 12)
+        $chartData = array_fill(1, 12, 0);
+
+        if ($metric === 'events') {
+            // Events created per month
+            $rows = Event::where('organizer_id', $organizer->id)
+                ->whereYear('created_at', $year)
+                ->selectRaw('MONTH(created_at) as month, COUNT(*) as total')
+                ->groupBy('month')
+                ->pluck('total', 'month');
+
+            foreach ($rows as $month => $total) {
+                $chartData[$month] = (int) $total;
+            }
+
+        } elseif ($metric === 'earnings') {
+            // Earnings per month (convert minor units to major for the chart)
+            $rows = EventPayout::whereHas('event', function ($q) use ($organizer) {
+                    $q->where('organizer_id', $organizer->id);
+                })
+                ->where('status', 'paid')
+                ->whereYear('created_at', $year)
+                ->selectRaw('MONTH(created_at) as month, SUM(amount) as total')
+                ->groupBy('month')
+                ->pluck('total', 'month');
+
+            foreach ($rows as $month => $total) {
+                // convert pence → pounds with 2 decimals
+                $chartData[$month] = round(((float) $total) / 100, 2);
+            }
+
+        } elseif ($metric === 'checkins') {
+            // Check-ins per month
+            $rows = EventRegistration::whereHas('event', function ($q) use ($organizer) {
+                    $q->where('organizer_id', $organizer->id);
+                })
+                ->whereNotNull('checked_in_at')
+                ->whereYear('checked_in_at', $year)
+                ->selectRaw('MONTH(checked_in_at) as month, COUNT(*) as total')
+                ->groupBy('month')
+                ->pluck('total', 'month');
+
+            foreach ($rows as $month => $total) {
+                $chartData[$month] = (int) $total;
+            }
+
+        } else {
+            // Default metric: registered attendees per month
+            $rows = EventRegistration::whereHas('event', function ($q) use ($organizer) {
+                    $q->where('organizer_id', $organizer->id);
+                })
+                ->whereYear('created_at', $year)
+                ->selectRaw('MONTH(created_at) as month,
+                    SUM(1 + COALESCE(party_adults,0) + COALESCE(party_children,0)) as total')
+                ->groupBy('month')
+                ->pluck('total', 'month');
+
+            foreach ($rows as $month => $total) {
+                $chartData[$month] = (int) $total;
+            }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 3. Year dropdown options
+        |--------------------------------------------------------------------------
+        */
+
+        // e.g. [2025, 2024, 2023, 2022, 2021]
+        $availableYears = range($currentYear, $currentYear - 4);
+
+        return view('dashboard', [
+            'year'           => $year,
+            'metric'         => $metric,
+            'eventsCount'    => $eventsCount,
+            'totalEarnings'  => $totalEarnings,      // still minor units; Blade divides by 100
+            'totalAttendees' => $totalAttendees,
+            'totalCheckins'  => $totalCheckins,
+            'chartData'      => array_values($chartData), // 0..11 for Jan–Dec
+            'availableYears' => $availableYears,
+        ]);
     }
+
+
+    public function downloadReport(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user->organizer) {
+            return redirect()
+                ->route('organizers.create')
+                ->with('error', 'Please create an organizer profile to download a report.');
+        }
+
+        $organizer   = $user->organizer;
+        $currentYear = now()->year;
+        $year        = (int) $request->input('year', $currentYear);
+        $metric      = $request->input('metric', 'attendees'); // attendees|events|earnings|checkins
+
+        // ---- KPIs (same logic as dashboard) ----
+        $eventsThisYear = Event::where('organizer_id', $organizer->id)
+            ->whereYear('created_at', $year);
+
+        $eventsCount = (clone $eventsThisYear)->count();
+
+        $payoutsQuery = EventPayout::whereHas('event', function ($q) use ($organizer) {
+                $q->where('organizer_id', $organizer->id);
+            })
+            ->where('status', 'paid')
+            ->whereYear('created_at', $year);
+
+        $totalEarnings = (int) $payoutsQuery->sum('amount'); // minor units
+
+        $registrationsQuery = EventRegistration::whereHas('event', function ($q) use ($organizer) {
+                $q->where('organizer_id', $organizer->id);
+            })
+            ->whereYear('created_at', $year);
+
+        $registrations = $registrationsQuery->get();
+
+        $totalAttendees = $registrations->sum(function ($r) {
+            $adults   = max(0, (int) $r->party_adults);
+            $children = max(0, (int) $r->party_children);
+            return 1 + $adults + $children;
+        });
+
+        $totalCheckins = EventRegistration::whereHas('event', function ($q) use ($organizer) {
+                $q->where('organizer_id', $organizer->id);
+            })
+            ->whereNotNull('checked_in_at')
+            ->whereYear('checked_in_at', $year)
+            ->count();
+
+        // ---- Monthly data (same idea as dashboard, but used in a table) ----
+        $chartData = array_fill(1, 12, 0);
+
+        if ($metric === 'events') {
+            $rows = Event::where('organizer_id', $organizer->id)
+                ->whereYear('created_at', $year)
+                ->selectRaw('MONTH(created_at) as month, COUNT(*) as total')
+                ->groupBy('month')
+                ->pluck('total', 'month');
+
+            foreach ($rows as $month => $total) {
+                $chartData[$month] = (int) $total;
+            }
+
+        } elseif ($metric === 'earnings') {
+            $rows = EventPayout::whereHas('event', function ($q) use ($organizer) {
+                    $q->where('organizer_id', $organizer->id);
+                })
+                ->where('status', 'paid')
+                ->whereYear('created_at', $year)
+                ->selectRaw('MONTH(created_at) as month, SUM(amount) as total')
+                ->groupBy('month')
+                ->pluck('total', 'month');
+
+            foreach ($rows as $month => $total) {
+                $chartData[$month] = round(((float) $total) / 100, 2); // pence → pounds
+            }
+
+        } elseif ($metric === 'checkins') {
+            $rows = EventRegistration::whereHas('event', function ($q) use ($organizer) {
+                    $q->where('organizer_id', $organizer->id);
+                })
+                ->whereNotNull('checked_in_at')
+                ->whereYear('checked_in_at', $year)
+                ->selectRaw('MONTH(checked_in_at) as month, COUNT(*) as total')
+                ->groupBy('month')
+                ->pluck('total', 'month');
+
+            foreach ($rows as $month => $total) {
+                $chartData[$month] = (int) $total;
+            }
+
+        } else { // attendees default
+            $rows = EventRegistration::whereHas('event', function ($q) use ($organizer) {
+                    $q->where('organizer_id', $organizer->id);
+                })
+                ->whereYear('created_at', $year)
+                ->selectRaw('MONTH(created_at) as month,
+                    SUM(1 + COALESCE(party_adults,0) + COALESCE(party_children,0)) as total')
+                ->groupBy('month')
+                ->pluck('total', 'month');
+
+            foreach ($rows as $month => $total) {
+                $chartData[$month] = (int) $total;
+            }
+        }
+
+        // turn into 0-based array for the view
+        $chartData = array_values($chartData);
+
+        $pdf = Pdf::loadView('dashboard-report', [
+            'organizer'      => $organizer,
+            'year'           => $year,
+            'metric'         => $metric,
+            'eventsCount'    => $eventsCount,
+            'totalEarnings'  => $totalEarnings,  // minor units
+            'totalAttendees' => $totalAttendees,
+            'totalCheckins'  => $totalCheckins,
+            'chartData'      => $chartData,
+        ]);
+
+        return $pdf->download("eventib-dashboard-{$year}.pdf");
+    }
+
+
+
+    public function manage(Request $request)
+    {
+        $user = $request->user();
+
+        // Ensure they have an organizer profile
+        if (! $user->organizer) {
+            return redirect()
+                ->route('organizers.create')
+                ->with('error', 'Please create an organizer profile before managing events.');
+        }
+
+        $organizer = $user->organizer;
+
+        $events = Event::where('organizer_id', $organizer->id)
+            ->with([
+                'sessions',
+                'categories',
+                'registrations' => function ($q) {
+                    // only count useful statuses
+                    $q->whereIn('status', ['paid', 'free', 'completed', 'checked_in']);
+                },
+                'unlocks',
+            ])
+            ->latest()
+            ->paginate(9);
+
+        return view('events.manage', compact('events'));
+    }
+
 
     public function create()
     {

@@ -42,6 +42,11 @@ class PageController extends Controller
         return view('static.cookies');
     }
 
+    public function organizerapp()
+    {
+        return view('static.organizer-app');
+    }
+
     public function contactSubmit(Request $request)
     {
         // simple honeypot

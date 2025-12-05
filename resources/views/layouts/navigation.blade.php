@@ -17,7 +17,7 @@
                     <x-nav-link :href="route('about')" :active="request()->routeIs('about')">About</x-nav-link>
                     @auth
                         <x-nav-link :href="route('my.tickets')" :active="request()->routeIs('my.tickets*')">My Tickets</x-nav-link>
-                        <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">Manage Events</x-nav-link>
+                        <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">Dashboard</x-nav-link>
                         <x-nav-link :href="route('events.create')" :active="request()->routeIs('events.create')">Create Events</x-nav-link>
                     @endauth
                     <x-nav-link :href="route('contact')" :active="request()->routeIs('contact')">Contact</x-nav-link>
@@ -122,7 +122,8 @@
                     <x-responsive-nav-link :href="route('about')" :active="request()->routeIs('about')">About</x-responsive-nav-link>
                     @auth
                         <x-responsive-nav-link :href="route('my.tickets')" :active="request()->routeIs('my.tickets*')">My Tickets</x-responsive-nav-link>
-                        <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">Manage Events</x-responsive-nav-link>
+                        <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">Dashboard</x-responsive-nav-link>
+                        <x-responsive-nav-link :href="route('events.manage')" :active="request()->routeIs('events.manage')">Manage Events</x-responsive-nav-link>
                         <x-responsive-nav-link :href="route('events.create')" :active="request()->routeIs('events.create')">Create Events</x-responsive-nav-link>
                     @endauth
                     <x-responsive-nav-link :href="route('contact')" :active="request()->routeIs('contact')">Contact</x-responsive-nav-link>

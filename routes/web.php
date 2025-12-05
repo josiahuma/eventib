@@ -59,6 +59,7 @@ Route::post('/contact', [PageController::class, 'contactSubmit'])->name('contact
 Route::get('/terms', [PageController::class, 'terms'])->name('terms');
 Route::get('/privacy', [PageController::class, 'privacy'])->name('privacy');
 Route::get('/cookies', [PageController::class, 'cookies'])->name('cookies');
+Route::get('/organizer-app', [PageController::class, 'organizerapp'])->name('organizerapp');
 Route::get('/organizers/{organizer}', [OrganizerController::class, 'show'])->name('organizers.show');
 Route::post('/organizers/{organizer}/contact', [OrganizerController::class, 'contact'])->name('organizers.contact');
 Route::get('/events/past', [EventController::class, 'past'])->name('events.past');
@@ -126,6 +127,11 @@ Route::middleware(['auth'])->group(function () {
 
     // Dashboard & events CRUD (no show)
     Route::get('/dashboard', [EventController::class, 'dashboard'])->name('dashboard');
+    Route::get('/dashboard/report', [EventController::class, 'downloadReport'])
+    ->name('dashboard.report');
+    // NEW: dedicated manage events page
+    Route::get('/manage-events', [EventController::class, 'manage'])
+    ->name('events.manage');
     Route::resource('events', EventController::class)->except(['show']);
 
     // Registrants (organiser)

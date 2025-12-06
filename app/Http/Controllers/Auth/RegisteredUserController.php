@@ -65,6 +65,6 @@ class RegisteredUserController extends Controller
             return redirect($redirect);
         }
 
-        return redirect()->intended(route('dashboard'));
+        return redirect()->intended(route('events.manage'));
         }
 }

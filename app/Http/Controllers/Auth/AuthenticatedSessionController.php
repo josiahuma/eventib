@@ -42,7 +42,7 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard')); // will now use session('url.intended') if present
+        return redirect()->intended(route('events.manage')); // will now use session('url.intended') if present
     }
 
 

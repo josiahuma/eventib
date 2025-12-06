@@ -26,6 +26,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // ✅ Check-in routes remain
     Route::post('/check-in', [MobileCheckInController::class, 'checkIn']);
     Route::get('/events/{event:public_id}/checked-in', [MobileCheckInController::class, 'checkedIn']);
+
+    Route::get('/mobile/dashboard', [\App\Http\Controllers\Api\MobileDashboardController::class, 'show']);
+
 });
 
 Route::post('/voice-check', [VoiceCheckController::class, 'check'])

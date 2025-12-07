@@ -400,9 +400,7 @@ class EventController extends Controller
                 ->with('error', 'Please create an organizer profile before managing events.');
         }
 
-        $organizer = $user->organizer;
-
-        $events = Event::where('organizer_id', $organizer->id)
+        $events = Event::where('user_id', $user->id)
             ->with([
                 'sessions',
                 'categories',
@@ -582,7 +580,7 @@ class EventController extends Controller
             }
         }
 
-        return redirect()->route('dashboard')->with('success', 'Event created successfully!');
+        return redirect()->route('events.manage')->with('success', 'Event created successfully!');
     }
 
     public function update(Request $request, Event $event)
@@ -716,7 +714,7 @@ class EventController extends Controller
         // Remove the whole categories upsert block from the old method.
 
         return redirect()
-            ->route('dashboard')
+            ->route('events.manage')
             ->with('success', 'Event updated successfully!');
     }
 
@@ -796,6 +794,6 @@ class EventController extends Controller
 
         $event->delete();
 
-        return redirect()->route('dashboard')->with('success', 'Event deleted.');
+        return redirect()->route('events.manage')->with('success', 'Event deleted.');
     }
 }

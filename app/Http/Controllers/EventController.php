@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use App\Mail\EventCreatedMail;
 use App\Mail\OrganizerNewEventMail;
@@ -463,7 +465,9 @@ class EventController extends Controller
             'ticket_currency' => 'nullable|string|in:GBP,USD,CAD,AUD,INR,NGN,KES,GHS,EUR|size:3',
 
             'avatar'          => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-            'banner'          => 'required|image|mimes:jpg,jpeg,png|max:4096',
+
+            'banner'          => 'nullable|image|mimes:jpg,jpeg,png|max:4096|required_without:external_banner_url',
+            'external_banner_url' => 'nullable|url',
             'is_promoted'     => 'nullable|boolean',
             'is_recurring'   => 'nullable|boolean',
             'recurrence_summary' => 'nullable|string|max:255',
@@ -526,8 +530,40 @@ class EventController extends Controller
         $feeBps  = $isPaid ? 590 : 0; // default
 
         // -------- 3) Persist --------
-        $avatarUrl = $request->hasFile('avatar') ? $request->file('avatar')->store('avatars', 'public') : null;
-        $bannerUrl = $request->hasFile('banner') ? $request->file('banner')->store('banners', 'public') : null;
+        $avatarUrl = $request->hasFile('avatar')
+            ? $request->file('avatar')->store('avatars', 'public')
+            : null;
+
+        $bannerUrl = null;
+
+        if ($request->hasFile('banner')) {
+            $bannerUrl = $request->file('banner')->store('banners', 'public');
+        } elseif ($request->filled('external_banner_url')) {
+            try {
+                $response = Http::timeout(10)->get($request->input('external_banner_url'));
+
+                if ($response->successful()) {
+                    // crude content-type → extension mapping
+                    $contentType = $response->header('Content-Type', 'image/jpeg');
+                    $ext = match (true) {
+                        str_contains($contentType, 'png')  => 'png',
+                        str_contains($contentType, 'webp') => 'webp',
+                        default                            => 'jpg',
+                    };
+
+                    $filename = 'banners/' . Str::uuid() . '.' . $ext;
+                    Storage::disk('public')->put($filename, $response->body());
+                    $bannerUrl = $filename;
+                }
+            } catch (\Throwable $e) {
+                // optional: log but don't break event creation
+                \Log::warning('Failed to download external banner', [
+                    'url' => $request->input('external_banner_url'),
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
 
         $tagsArray = is_array($validated['tags'] ?? null) ? $validated['tags'] : [];
 

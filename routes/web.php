@@ -26,6 +26,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\OrganizerController;
 use App\Http\Controllers\Admin\HomepageSponsorController;
 use App\Http\Controllers\DigitalPassController;
+use App\Http\Controllers\EventImportController;
 
 
 
@@ -114,6 +115,10 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth'])->group(function () {
+
+    Route::get('import', [EventImportController::class, 'form'])->name('import.form');
+    Route::post('import', [EventImportController::class, 'handle'])->name('import.handle');
+
     // Profile & payouts
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

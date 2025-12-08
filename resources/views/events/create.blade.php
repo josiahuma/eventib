@@ -326,7 +326,8 @@
                                     class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
                                 <option value="">— Select organizer —</option>
                                 @foreach($organizers as $organizer)
-                                    <option value="{{ $organizer->id }}" @selected(old('organizer_id') == $organizer->id)>
+                                    <option value="{{ $organizer->id }}" 
+                                        @selected(old('organizer_id') == $organizer->id)>
                                         {{ $organizer->name }}
                                     </option>
                                 @endforeach
@@ -338,7 +339,10 @@
                             <select name="category" class="w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500">
                                 <option value="">— Select —</option>
                                 @foreach (['Arts','Business','Charity','Community','Education','Entertainment','Food & Drink','Fashion','Health','Music','Religion','Sports','Technology','Travel'] as $cat)
-                                    <option value="{{ $cat }}" @selected(old('category') === $cat)>{{ $cat }}</option>
+                                    <option value="{{ $cat }}"
+                                        @selected(old('category', request('category')) === $cat)>
+                                        {{ $cat }}
+                                    </option>
                                 @endforeach
                             </select>
                         </div>
@@ -529,15 +533,34 @@
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div>
                                     <label class="block text-sm text-gray-700 mb-1">Title</label>
-                                    <input type="text" name="sessions[0][name]" required class="w-full rounded-lg border-gray-300" placeholder="e.g., Opening Keynote">
+                                    <input
+                                        type="text"
+                                        name="sessions[0][name]"
+                                        value="{{ old('sessions.0.name') }}"
+                                        required
+                                        class="w-full rounded-lg border-gray-300"
+                                        placeholder="e.g., Opening Keynote"
+                                    />
                                 </div>
                                 <div>
                                     <label class="block text-sm text-gray-700 mb-1">Date</label>
-                                    <input type="date" name="sessions[0][date]" required class="w-full rounded-lg border-gray-300">
+                                    <input
+                                        type="date"
+                                        name="sessions[0][date]"
+                                        value="{{ old('sessions.0.date') }}"
+                                        required
+                                        class="w-full rounded-lg border-gray-300"
+                                    />
                                 </div>
                                 <div>
                                     <label class="block text-sm text-gray-700 mb-1">Start time</label>
-                                    <input type="time" name="sessions[0][time]" required class="w-full rounded-lg border-gray-300">
+                                    <input
+                                        type="time"
+                                        name="sessions[0][time]"
+                                        value="{{ old('sessions.0.time') }}"
+                                        required
+                                        class="w-full rounded-lg border-gray-300"
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -548,20 +571,48 @@
                     </button>
                 </div>
 
+                {{-- MEDIA --}}
                 <div class="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
                     <h3 class="text-lg font-semibold text-gray-900">Media</h3>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Event banner (required)</label>
-                            <p class="text-xs text-gray-500 mb-2">Recommended 1200×300 (4:1)</p>
-                            <input type="file" name="banner" class="w-full rounded-lg border-gray-300" required>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Event banner (required)
+                            </label>
+                            <p class="text-xs text-gray-500 mb-2">
+                                Recommended 1200×300 (4:1). You can upload a file or use the imported banner.
+                            </p>
+
+                            {{-- 👇 Hidden field carries the imported banner URL from the importer --}}
+                            <input
+                                type="hidden"
+                                name="external_banner_url"
+                                value="{{ old('external_banner_url') }}"
+                            >
+
+                            <input
+                                type="file"
+                                name="banner"
+                                class="w-full rounded-lg border-gray-300"
+                            >
+
+                            @if(old('external_banner_url'))
+                                <p class="text-xs text-emerald-700 mt-1">
+                                    An image was imported from the source page and will be used
+                                    as the banner if you don’t upload a file.
+                                </p>
+                            @endif
                         </div>
+
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Event avatar (optional)</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Event avatar (optional)
+                            </label>
                             <input type="file" name="avatar" class="w-full rounded-lg border-gray-300">
                         </div>
                     </div>
                 </div>
+
 
                 <div class="flex items-center justify-between">
                     <button type="button" @click="goStep(2)" class="inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-gray-700">Back</button>

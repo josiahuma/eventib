@@ -51,6 +51,7 @@ Route::get('/events/{id}/{tail?}', function (int $id, $tail = null) {
 |--------------------------------------------------------------------------
 */
 Route::get('/', [EventController::class, 'publicIndex'])->name('homepage');
+Route::get('/events/find', [EventController::class, 'browse'])->name('events.find');
 Route::get('/how-it-works', [PageController::class, 'how'])->name('how');
 Route::get('/pricing', [PageController::class, 'pricing'])->name('pricing');
 

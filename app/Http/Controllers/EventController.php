@@ -114,6 +114,131 @@ class EventController extends Controller
         ]);
     }
 
+    public function browse(Request $request)
+    {
+        $now      = Carbon::now();
+
+        $q        = trim($request->query('q', ''));
+        $loc      = trim($request->query('loc', ''));
+        $price    = $request->query('price');      // null | free | paid
+        $category = $request->query('category');  // string or null
+        $when     = $request->query('when');      // null | today | tomorrow | weekend | week | month
+
+        // Same static category list you’re already using
+        $catsList = [
+            'Arts','Business','Charity','Community','Education','Entertainment',
+            'Food & Drink','Fashion','Health','Music','Religion','Sports','Technology','Travel'
+        ];
+
+        // ------- Base query: only upcoming events -------
+        $events = Event::query()
+            ->where('is_disabled', false)
+            ->with([
+                'sessions'   => fn ($q) => $q->orderBy('session_date', 'asc'),
+                'categories' => fn ($q) => $q->where('is_active', true)
+                                            ->orderBy('sort')->orderBy('id'),
+                'organizer',
+            ])
+            ->withMin('sessions', 'session_date');
+
+        // Upcoming only
+        $events->whereHas('sessions', fn ($q2) => $q2->where('session_date', '>=', $now));
+
+        // Keyword search
+        if ($q !== '') {
+            $like = '%' . $q . '%';
+            $events->where(function ($s) use ($like) {
+                $s->where('name', 'like', $like)
+                ->orWhere('description', 'like', $like)
+                ->orWhere('tags', 'like', $like)
+                ->orWhere('location', 'like', $like)
+                ->orWhereHas('organizer', fn ($oq) => $oq->where('name', 'like', $like));
+            });
+        }
+
+        // Location text (e.g. "Nottingham")
+        if ($loc !== '') {
+            $events->where('location', 'like', '%' . $loc . '%');
+        }
+
+        // Category filter
+        if ($category) {
+            $events->where('category', $category);
+        }
+
+        // Price filter: free vs paid
+        if ($price === 'free') {
+            $events->where(function ($q2) {
+                $q2->whereDoesntHave('categories', function ($cq) {
+                        $cq->where('is_active', true)->where('price', '>', 0);
+                    })
+                    ->where(function ($q3) {
+                        $q3->whereNull('ticket_cost')
+                        ->orWhere('ticket_cost', 0);
+                    });
+            });
+        } elseif ($price === 'paid') {
+            $events->where(function ($q2) {
+                $q2->whereHas('categories', function ($cq) {
+                        $cq->where('is_active', true)->where('price', '>', 0);
+                    })
+                    ->orWhere('ticket_cost', '>', 0);
+            });
+        }
+
+        // Date filter
+        switch ($when) {
+            case 'today':
+                $events->whereHas('sessions', fn ($q2) =>
+                    $q2->whereDate('session_date', $now->toDateString())
+                );
+                break;
+            case 'tomorrow':
+                $tomorrow = $now->copy()->addDay()->toDateString();
+                $events->whereHas('sessions', fn ($q2) =>
+                    $q2->whereDate('session_date', $tomorrow)
+                );
+                break;
+            case 'weekend':
+                // Next Sat–Sun window
+                $start = $now->copy()->next(Carbon::SATURDAY)->startOfDay();
+                $end   = $start->copy()->addDay()->endOfDay();
+                $events->whereHas('sessions', fn ($q2) =>
+                    $q2->whereBetween('session_date', [$start, $end])
+                );
+                break;
+            case 'week':
+                $end = $now->copy()->addWeek()->endOfDay();
+                $events->whereHas('sessions', fn ($q2) =>
+                    $q2->whereBetween('session_date', [$now, $end])
+                );
+                break;
+            case 'month':
+                $end = $now->copy()->addMonth()->endOfDay();
+                $events->whereHas('sessions', fn ($q2) =>
+                    $q2->whereBetween('session_date', [$now, $end])
+                );
+                break;
+        }
+
+        $events = $events
+            ->orderBy('sessions_min_session_date', 'asc')
+            ->paginate(24)
+            ->appends($request->query()); // keep filters when paging
+
+        return view('events.find', [
+            'events'  => $events,
+            'cats'    => $catsList,
+            'filters' => [
+                'q'        => $q,
+                'loc'      => $loc,
+                'price'    => $price,
+                'category' => $category,
+                'when'     => $when,
+            ],
+        ]);
+    }
+
 
     public function dashboard(Request $request)
     {

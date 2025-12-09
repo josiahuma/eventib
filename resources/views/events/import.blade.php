@@ -1,5 +1,9 @@
 {{-- resources/views/events/import.blade.php --}}
 <x-app-layout>
+    @section('meta')
+        <meta name="robots" content="noindex, nofollow">
+    @endsection
+
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">
             Import Event from URL

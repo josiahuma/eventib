@@ -57,13 +57,13 @@
     <div class="relative min-h-screen">
         {{-- Desktop sponsor “skin” only on the sides, centre left alone --}}
         @if ($sponsorSkin && $sponsorBgUrl)
-            <div class="hidden 2xl:block fixed inset-y-0 left-0 right-0 z-0">
+            <div class="hidden 2xl:block fixed inset-y-0 left-0 right-0 z-0 pointer-events-none">
                 <div class="h-full w-full flex justify-between">
                     {{-- Left sponsor gutter (clickable) --}}
                     <a href="{{ $sponsorSkin->website_url }}"
                     target="_blank"
                     rel="noopener"
-                    class="block h-full w-[260px] xl:w-[320px] bg-center bg-cover"
+                    class="block h-full w-[260px] xl:w-[320px] bg-center bg-cover pointer-events-auto"
                     style="background-image: url('{{ $sponsorBgUrl }}');">
                     </a>
 
@@ -74,12 +74,13 @@
                     <a href="{{ $sponsorSkin->website_url }}"
                     target="_blank"
                     rel="noopener"
-                    class="block h-full w-[260px] xl:w-[320px] bg-center bg-cover"
+                    class="block h-full w-[260px] xl:w-[320px] bg-center bg-cover pointer-events-auto"
                     style="background-image: url('{{ $sponsorBgUrl }}');">
                     </a>
                 </div>
             </div>
         @endif
+
 
 
         {{-- MAIN CONTENT --}}
@@ -273,7 +274,7 @@
                 x-init="init()"
                 @mouseenter="pause()"
                 @mouseleave="play()"
-                class="rounded-2xl overflow-hidden ring-1 ring-gray-200 mb-10 relative bg-white"
+                class="hidden sm:block rounded-2xl overflow-hidden ring-1 ring-gray-200 mb-10 relative bg-white"
             >
                 <div class="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-white to-transparent z-10"></div>
                 <div class="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-white to-transparent z-10"></div>

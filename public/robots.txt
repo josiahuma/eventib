@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
-
+Disallow: /import
 Sitemap: https://eventib.com/sitemap.xml

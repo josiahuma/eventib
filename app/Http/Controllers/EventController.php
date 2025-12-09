@@ -265,7 +265,7 @@ class EventController extends Controller
         */
 
         // 1) Number of events posted in the selected year
-        $eventsThisYear = Event::where('organizer_id', $organizer->id)
+        $eventsThisYear = Event::where('user_id', $user->id)
             ->whereYear('created_at', $year);
 
         $eventsCount = (clone $eventsThisYear)->count();

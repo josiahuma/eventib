@@ -117,7 +117,8 @@
 
             <div class="px-4 py-3">
                 <div class="space-y-1">
-                    <x-responsive-nav-link :href="route('homepage')" :active="request()->routeIs('homepage')">Find Events</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('homepage')" :active="request()->routeIs('homepage')">Home</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('events.find')" :active="request()->routeIs('events.find')">Find Events</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('how')" :active="request()->routeIs('how')">How it works</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('pricing')" :active="request()->routeIs('pricing')">Pricing</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('about')" :active="request()->routeIs('about')">About</x-responsive-nav-link>

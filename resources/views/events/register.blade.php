@@ -27,37 +27,43 @@
 
         $mode = $hasCats ? 'cats' : ($unit > 0 ? 'single' : 'free');
 
-        // 🔹 Only upcoming sessions (hide past ones)
+        // Only upcoming sessions
         $upcomingSessions = $event->sessions
-        ->filter(fn($s) => \Carbon\Carbon::parse($s->session_date)->isFuture())
-        ->sortBy('session_date')
-        ->values();
+            ->filter(fn($s) => \Carbon\Carbon::parse($s->session_date)->isFuture())
+            ->sortBy('session_date')
+            ->values();
     @endphp
 
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {{-- alerts --}}
         @if (session('success'))
-            <div class="mb-6 p-4 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <div class="mb-6 border border-emerald-200 bg-emerald-50 text-emerald-700 rounded-xl p-4">
                 {{ session('success') }}
             </div>
         @endif
 
         @if (session('warning'))
-            <div class="mb-6 p-4 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
+            <div class="mb-6 border border-amber-200 bg-amber-50 text-amber-800 rounded-xl p-4">
                 {{ session('warning') }}
             </div>
         @endif
 
         @if (session('error'))
-            <div class="mb-6 p-4 rounded-lg bg-rose-50 text-rose-700 border border-rose-200">
+            <div class="mb-6 border border-rose-200 bg-rose-50 text-rose-700 rounded-xl p-4">
                 {{ session('error') }}
             </div>
         @endif
 
-        <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+        {{-- main card --}}
+        <div class="form-card">
+            {{-- ticket summary header --}}
             <div class="flex items-center justify-between">
                 <div>
-                    <div class="text-sm text-gray-500">Ticket</div>
-                    <div class="text-2xl font-bold text-gray-900">
+                    <div class="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                        Ticket
+                    </div>
+                    <div class="mt-1 text-2xl font-semibold text-slate-900">
                         @if($mode === 'cats')
                             @if($min === $max)
                                 {{ $sym }}{{ number_format($min, 2) }}
@@ -71,129 +77,178 @@
                         @endif
                     </div>
                 </div>
+
                 @if ($image)
-                    <img src="{{ $image }}" alt="" class="h-12 w-12 rounded-lg object-cover">
+                    <img src="{{ $image }}" alt="" class="h-12 w-12 rounded-md object-cover">
                 @endif
             </div>
-                {{-- If user is NOT logged in and event REQUIRES Digital Pass --}}
-                @if(!auth()->check() && $event->digital_pass_mode === 'required')
-                    <div class="mt-4 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                        <div class="font-semibold mb-0.5">
-                            This event requires an Eventib Digital Pass
-                        </div>
-                        <p class="text-xs md:text-sm">
-                            To register, you’ll need to create an account and set up your Digital Pass
-                            (voice/face). Please
-                            <a href="{{ route('login') }}" class="underline font-medium">log in</a>
-                            or
-                            <a href="{{ route('register') }}" class="underline font-medium">create a free account</a>
-                            first, then come back to this page.
-                        </p>
+
+            {{-- digital pass notice for guests when required --}}
+            @if(!auth()->check() && $event->digital_pass_mode === 'required')
+                <div class="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <div class="font-semibold mb-0.5">
+                        This event requires an Eventib Digital Pass
                     </div>
-                @endif
+                    <p class="text-xs md:text-sm">
+                        To register, you’ll need to create an account and set up your Digital Pass
+                        (voice/face). Please
+                        <a href="{{ route('login') }}" class="underline font-medium">log in</a>
+                        or
+                        <a href="{{ route('register') }}" class="underline font-medium">create a free account</a>
+                        first, then come back to this page.
+                    </p>
+                </div>
+            @endif
 
-
-            <form action="{{ route('events.register.store', $event) }}"
-                  method="POST"
-                  class="mt-6"
-                  x-data="ticketForm({
-                      mode: '{{ $mode }}',
-                      sym: '{{ $sym }}',
-                      unit: {{ $unit }},
-                      cats: @js($cats->map(fn($c) => ['id' => $c->id, 'name' => $c->name, 'price' => (float)$c->price])->values()),
-                      oldCats: @js(old('categories', [])),
-                      initQty: {{ (int) old('quantity', 1) }},
-                      initA: {{ (int) old('party_adults', 0) }},
-                      initC: {{ (int) old('party_children', 0) }},
-                  })"
-                  x-init="init()">
+            {{-- form --}}
+            <form
+                action="{{ route('events.register.store', $event) }}"
+                method="POST"
+                class="mt-6 space-y-6"
+                x-data="ticketForm({
+                    mode: '{{ $mode }}',
+                    sym: '{{ $sym }}',
+                    unit: {{ $unit }},
+                    cats: @js($cats->map(fn($c) => ['id' => $c->id, 'name' => $c->name, 'price' => (float)$c->price])->values()),
+                    oldCats: @js(old('categories', [])),
+                    initQty: {{ (int) old('quantity', 1) }},
+                    initA: {{ (int) old('party_adults', 0) }},
+                    initC: {{ (int) old('party_children', 0) }},
+                })"
+                x-init="init()"
+            >
                 @csrf
 
                 {{-- Attendee details --}}
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Full name</label>
-                        <input type="text" name="name"
-                               value="{{ old('name', optional(auth()->user())->name) }}"
-                               class="mt-1 w-full rounded-lg border-gray-300" required>
-                        @error('name') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                        <label class="form-label">Full name</label>
+                        <input
+                            type="text"
+                            name="name"
+                            required
+                            value="{{ old('name', optional(auth()->user())->name) }}"
+                            class="form-input"
+                        >
+                        @error('name')
+                            <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Email</label>
-                        <input type="email" name="email"
-                               value="{{ old('email', optional(auth()->user())->email) }}"
-                               class="mt-1 w-full rounded-lg border-gray-300" required>
-                        {{-- This flag is set ONLY for free events in the controller --}}
+                        <label class="form-label">Email</label>
+                        <input
+                            type="email"
+                            name="email"
+                            required
+                            value="{{ old('email', optional(auth()->user())->email) }}"
+                            class="form-input"
+                        >
                         @if(Auth::check() && !empty($alreadyRegistered))
-                            <p class="text-sm text-rose-600 mt-1">You are already registered for this event.</p>
+                            <p class="text-xs text-rose-600 mt-1">You are already registered for this event.</p>
                         @endif
-                        @error('email') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                        @error('email')
+                            <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <div class="md:col-span-2">
-                        <label class="block text-sm font-medium text-gray-700">Mobile (optional)</label>
-                        <input type="text" name="mobile" value="{{ old('mobile') }}"
-                               class="mt-1 w-full rounded-lg border-gray-300">
-                        @error('mobile') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                        <label class="form-label">Mobile (optional)</label>
+                        <input
+                            type="text"
+                            name="mobile"
+                            value="{{ old('mobile') }}"
+                            class="form-input"
+                        >
+                        @error('mobile')
+                            <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
+                        @enderror
                     </div>
                 </div>
 
                 {{-- Sessions --}}
-                <div class="mt-6">
-                    <label class="block text-sm font-medium text-gray-700">Select session(s)</label>
+                <div>
+                    <label class="form-label">Select session(s)</label>
                     <div class="mt-2 space-y-2">
                         @forelse ($upcomingSessions as $s)
-                            <label class="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50">
-                                <input type="checkbox" name="session_ids[]" value="{{ $s->id }}"
-                                    class="h-4 w-4 rounded border-gray-300"
-                                    @checked(in_array($s->id, old('session_ids', [])))>
+                            <label class="flex items-center gap-3 border border-slate-200 rounded-md px-3 py-2 hover:bg-slate-50">
+                                <input
+                                    type="checkbox"
+                                    name="session_ids[]" value="{{ $s->id }}"
+                                    class="form-checkbox h-4 w-4"
+                                    @checked(in_array($s->id, old('session_ids', [])))
+                                >
                                 <div>
-                                    <div class="text-sm font-medium text-gray-900">{{ $s->session_name }}</div>
-                                    <div class="text-sm text-gray-600">
+                                    <div class="text-sm font-medium text-slate-900">
+                                        {{ $s->session_name }}
+                                    </div>
+                                    <div class="text-xs text-slate-600">
                                         {{ \Carbon\Carbon::parse($s->session_date)->format('D, d M Y · g:ia') }}
                                     </div>
                                 </div>
                             </label>
                         @empty
-                            <p class="text-sm text-gray-600">
+                            <p class="text-sm text-slate-600">
                                 There are no upcoming sessions available to register for.
                             </p>
                         @endforelse
                     </div>
-                    @error('session_ids') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                    @error('session_ids')
+                        <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
+                    @enderror
                 </div>
 
                 {{-- Categories mode --}}
                 @if($hasCats)
-                    <div class="mt-6" x-show="mode === 'cats'">
-                        <label class="block text-sm font-medium text-gray-700">Choose tickets</label>
+                    <div x-show="mode === 'cats'">
+                        <label class="form-label">Choose tickets</label>
                         <div class="mt-2 space-y-3">
                             @foreach($cats as $c)
-                                <div class="flex items-center justify-between border rounded-lg p-3">
+                                <div class="flex items-center justify-between border border-slate-200 rounded-md p-3">
                                     <div>
-                                        <div class="text-sm font-medium text-gray-900">{{ $c->name }}</div>
-                                        <div class="text-xs text-gray-600">{{ $sym }}{{ number_format((float)$c->price, 2) }}</div>
+                                        <div class="text-sm font-medium text-slate-900">{{ $c->name }}</div>
+                                        <div class="text-xs text-slate-500">
+                                            {{ $sym }}{{ number_format((float)$c->price, 2) }}
+                                        </div>
                                     </div>
 
                                     <div class="flex items-center gap-2">
-                                        <button type="button" class="px-2.5 py-1.5 rounded-lg bg-gray-100"
-                                                @click="decCat({{ $c->id }})">−</button>
+                                        <button
+                                            type="button"
+                                            class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
+                                            @click="decCat({{ $c->id }})"
+                                        >−</button>
                                         <div class="w-6 text-center font-semibold" x-text="catQty[{{ $c->id }}] ?? 0"></div>
-                                        <button type="button" class="px-2.5 py-1.5 rounded-lg bg-gray-100"
-                                                @click="incCat({{ $c->id }})">+</button>
+                                        <button
+                                            type="button"
+                                            class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
+                                            @click="incCat({{ $c->id }})"
+                                        >+</button>
                                     </div>
 
-                                    <input type="hidden" :name="'categories[{{ $c->id }}]'" :value="catQty[{{ $c->id }}] ?? 0">
+                                    <input
+                                        type="hidden"
+                                        :name="'categories[{{ $c->id }}]'"
+                                        :value="catQty[{{ $c->id }}] ?? 0"
+                                    >
                                 </div>
                             @endforeach
                         </div>
-                        @error('categories') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
 
-                        <div class="mt-3 text-sm text-gray-700">
-                            <div>Total items: <span class="font-semibold" x-text="totalQty()"></span></div>
+                        @error('categories')
+                            <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
+                        @enderror
+
+                        <div class="mt-3 text-sm text-slate-700">
+                            <div>
+                                Total items:
+                                <span class="font-semibold" x-text="totalQty()"></span>
+                            </div>
                             <template x-if="total() > 0">
-                                <div>Total: <span class="font-semibold" x-text="sym + total().toFixed(2)"></span></div>
+                                <div>
+                                    Total:
+                                    <span class="font-semibold" x-text="sym + total().toFixed(2)"></span>
+                                </div>
                             </template>
                         </div>
                     </div>
@@ -201,59 +256,95 @@
 
                 {{-- Single price --}}
                 @if(!$hasCats && $unit > 0)
-                    <div class="mt-6" x-show="mode === 'single'">
-                        <label class="block text-sm font-medium text-gray-700">Ticket quantity</label>
+                    <div x-show="mode === 'single'">
+                        <label class="form-label">Ticket quantity</label>
                         <div class="mt-2 flex items-center gap-3">
-                            <button type="button" class="px-2.5 py-1.5 rounded-lg bg-gray-100" @click="dec('qty')">−</button>
+                            <button
+                                type="button"
+                                class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
+                                @click="dec('qty')"
+                            >−</button>
                             <div class="text-lg font-semibold" x-text="qty"></div>
-                            <button type="button" class="px-2.5 py-1.5 rounded-lg bg-gray-100" @click="inc('qty')">+</button>
+                            <button
+                                type="button"
+                                class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
+                                @click="inc('qty')"
+                            >+</button>
                         </div>
-                        <input type="hidden" name="quantity" :value="qty">
-                        @error('quantity') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
 
-                        <div class="mt-2 text-sm text-gray-600">
-                            Total: <span class="font-semibold" x-text="sym + (unit * qty).toFixed(2)"></span>
+                        <input type="hidden" name="quantity" :value="qty">
+
+                        @error('quantity')
+                            <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
+                        @enderror
+
+                        <div class="mt-2 text-sm text-slate-600">
+                            Total:
+                            <span class="font-semibold" x-text="sym + (unit * qty).toFixed(2)"></span>
                         </div>
                     </div>
                 @endif
 
                 {{-- Free mode --}}
                 @if(!$hasCats && $unit == 0)
-                    <div class="mt-6" x-show="mode === 'free'">
-                        <label class="block text-sm font-medium text-gray-700">Who’s coming with you?</label>
-                        <p class="text-xs text-gray-500 mt-1">You can add adults and/or children (free events only).</p>
+                    <div x-show="mode === 'free'">
+                        <label class="form-label">Who’s coming with you?</label>
+                        <p class="form-help">
+                            You can add adults and/or children (free events only).
+                        </p>
 
                         <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div class="rounded-lg border p-3">
-                                <div class="text-sm text-gray-700">Adults</div>
+                            <div class="rounded-md border border-slate-200 p-3">
+                                <div class="text-sm text-slate-700">Adults</div>
                                 <div class="mt-2 flex items-center gap-3">
-                                    <button type="button" class="px-2.5 py-1.5 rounded-lg bg-gray-100" @click="dec('adults')">−</button>
+                                    <button
+                                        type="button"
+                                        class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
+                                        @click="dec('adults')"
+                                    >−</button>
                                     <div class="text-lg font-semibold" x-text="adults"></div>
-                                    <button type="button" class="px-2.5 py-1.5 rounded-lg bg-gray-100" @click="inc('adults')">+</button>
+                                    <button
+                                        type="button"
+                                        class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
+                                        @click="inc('adults')"
+                                    >+</button>
                                 </div>
                                 <input type="hidden" name="party_adults" :value="adults">
-                                @error('party_adults') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                                @error('party_adults')
+                                    <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
+                                @enderror
                             </div>
 
-                            <div class="rounded-lg border p-3">
-                                <div class="text-sm text-gray-700">Children</div>
+                            <div class="rounded-md border border-slate-200 p-3">
+                                <div class="text-sm text-slate-700">Children</div>
                                 <div class="mt-2 flex items-center gap-3">
-                                    <button type="button" class="px-2.5 py-1.5 rounded-lg bg-gray-100" @click="dec('children')">−</button>
+                                    <button
+                                        type="button"
+                                        class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
+                                        @click="dec('children')"
+                                    >−</button>
                                     <div class="text-lg font-semibold" x-text="children"></div>
-                                    <button type="button" class="px-2.5 py-1.5 rounded-lg bg-gray-100" @click="inc('children')">+</button>
+                                    <button
+                                        type="button"
+                                        class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
+                                        @click="inc('children')"
+                                    >+</button>
                                 </div>
                                 <input type="hidden" name="party_children" :value="children">
-                                @error('party_children') <p class="text-sm text-red-600 mt-1">{{ $message }}</p> @enderror
+                                @error('party_children')
+                                    <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
+                                @enderror
                             </div>
                         </div>
 
-                        <div class="mt-3 text-sm text-gray-600">
-                            Total attendee number: <span class="font-medium" x-text="1 + adults + children"></span>
+                        <div class="mt-3 text-sm text-slate-600">
+                            Total attendee number:
+                            <span class="font-medium" x-text="1 + adults + children"></span>
                         </div>
                     </div>
                 @endif
 
-               {{-- Digital pass section --}}
+                {{-- Digital pass section for logged-in users --}}
                 @if(auth()->check())
                     @php
                         $dp         = auth()->user()->digitalPass;
@@ -261,64 +352,69 @@
                     @endphp
 
                     @if($dp && $dp->is_active)
-                        <div class="mt-6 border rounded-lg p-3 bg-slate-50">
+                        <div class="border border-slate-200 rounded-md bg-slate-50 px-3 py-3">
                             <label class="flex items-start gap-2">
                                 <input
                                     type="checkbox"
                                     name="use_digital_pass"
                                     value="1"
-                                    class="mt-1 rounded border-gray-300"
-                                    {{-- keep checkbox checked on validation error --}}
+                                    class="form-checkbox mt-1"
                                     @checked(old('use_digital_pass'))
                                 >
                                 <span>
-                                    <span class="font-medium">
+                                    <span class="font-medium text-slate-900">
                                         Use my Digital Pass for check-in
                                     </span><br>
-
-                                    {{-- 👇 Required vs optional helper text --}}
                                     @if($dpRequired)
-                                        <span class="text-xs text-red-600 font-medium">
+                                        <span class="text-xs text-rose-600 font-medium">
                                             This event requires a Digital Pass. Tick this box to continue.
                                         </span>
                                     @else
-                                        <span class="text-xs text-gray-500">
-                                            You can use your Digital Pass to check in with your voice or face instead of only scanning a QR code.
+                                        <span class="text-xs text-slate-500">
+                                            Use your voice/face pass instead of only scanning a QR code at the venue.
                                         </span>
                                     @endif
                                 </span>
                             </label>
 
-                            {{-- 👇 Inline validation error for required events --}}
                             @error('use_digital_pass')
-                                <p class="text-xs text-red-600 mt-1">
-                                    {{ $message }}
-                                </p>
+                                <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
                             @enderror
                         </div>
                     @else
-                        <div class="mt-6 border rounded-lg p-3 bg-slate-50 flex items-center justify-between gap-3">
+                        <div class="border border-slate-200 rounded-md bg-slate-50 px-3 py-3 flex items-center justify-between gap-3">
                             <div>
-                                <div class="text-sm font-medium text-gray-800">
+                                <div class="text-sm font-medium text-slate-900">
                                     Set up your Digital Pass (optional)
                                 </div>
-                                <div class="text-xs text-gray-500 mt-0.5">
+                                <div class="text-xs text-slate-500 mt-0.5">
                                     Create a secure voice/face pass once and reuse it to check in to supported events.
                                 </div>
                             </div>
-                            <a href="{{ route('digital-pass.setup') }}"
-                            class="inline-flex items-center px-3 py-1.5 rounded-lg bg-indigo-600 text-xs font-medium text-white hover:bg-indigo-700">
+                            <a
+                                href="{{ route('digital-pass.setup') }}"
+                                class="form-primary-btn px-3 py-1.5 text-xs"
+                            >
                                 Setup
                             </a>
                         </div>
                     @endif
                 @endif
 
-                <div class="mt-6 flex items-center justify-end gap-3">
-                    <a href="{{ route('events.show', $event) }}" class="text-sm text-gray-600 hover:text-gray-800">Cancel</a>
-                    <button type="submit"
-                            :disabled="mode==='cats' && totalQty()===0"
-                            class="inline-flex items-center px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 disabled:opacity-50">
+                {{-- footer actions --}}
+                <div class="flex items-center justify-end gap-3 pt-2">
+                    <a
+                        href="{{ route('events.show', $event) }}"
+                        class="form-secondary-btn px-4 py-2"
+                    >
+                        Cancel
+                    </a>
+
+                    <button
+                        type="submit"
+                        :disabled="mode==='cats' && totalQty()===0"
+                        class="form-primary-btn disabled:opacity-50"
+                    >
                         <span x-text="submitLabel()"></span>
                     </button>
                 </div>
@@ -326,11 +422,11 @@
         </div>
     </div>
 
+    {{-- Alpine ticketForm stays the same --}}
     <script>
         function ticketForm(cfg) {
             const MAX = 10;
             return {
-                // existing ticket state
                 mode: cfg.mode,
                 sym: cfg.sym || '',
                 unit: cfg.unit || 0,
@@ -340,7 +436,7 @@
                 cats: cfg.cats || [],
                 catQty: {},
 
-                // 🔊 Voice Pass state
+                // Voice Pass state (unchanged)
                 voiceEnabled: false,
                 isRecording: false,
                 hasVoicePreview: false,
@@ -357,7 +453,6 @@
                     });
                 },
 
-                // quantity controls
                 inc(what) {
                     if (what === 'qty') this.qty = Math.min(MAX, this.qty + 1);
                     if (what === 'adults') this.adults = Math.min(20, this.adults + 1);
@@ -369,7 +464,6 @@
                     if (what === 'children') this.children = Math.max(0, this.children - 1);
                 },
 
-                // categories
                 incCat(id) { this.catQty[id] = (this.catQty[id] || 0) + 1; },
                 decCat(id) { this.catQty[id] = Math.max(0, (this.catQty[id] || 0) - 1); },
                 totalQty() {
@@ -385,7 +479,6 @@
                     return this.unit > 0 ? 'Proceed to Payment' : 'Register';
                 },
 
-                // 🔊 Voice Pass helpers
                 toggleVoiceEnabled() {
                     this.voiceEnabled = !this.voiceEnabled;
                     if (!this.voiceEnabled) {
@@ -415,23 +508,20 @@
                         this.mediaRecorder.onstop = () => {
                             const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
 
-                            // create preview
                             if (this.voicePreviewUrl) {
                                 URL.revokeObjectURL(this.voicePreviewUrl);
                             }
                             this.voicePreviewUrl = URL.createObjectURL(blob);
                             this.hasVoicePreview = true;
 
-                            // convert to base64 and store in hidden input
                             const reader = new FileReader();
                             reader.onloadend = () => {
                                 if (this.$refs.voiceBlob) {
-                                    this.$refs.voiceBlob.value = reader.result; // data:audio/webm;base64,xxx
+                                    this.$refs.voiceBlob.value = reader.result;
                                 }
                             };
                             reader.readAsDataURL(blob);
 
-                            // stop mic tracks
                             if (this.mediaRecorder && this.mediaRecorder.stream) {
                                 this.mediaRecorder.stream.getTracks().forEach(t => t.stop());
                             }

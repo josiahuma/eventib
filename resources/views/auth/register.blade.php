@@ -11,7 +11,7 @@
                 {{-- Social sign-up --}}
                 <div class="space-y-3">
                     <a href="{{ route('oauth.redirect','google') }}"
-                       class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                       class="inline-flex w-full items-center justify-center gap-2 rounded-none border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
                         <svg class="h-5 w-5" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42v-.1H24v7.2h11.3c-1.6 4.5-5.9 7.7-11.3 7.7-6.4 0-11.7-5.2-11.7-11.7S17.6 12 24 12c3 0 5.7 1.1 7.7 3l5-5C33.5 6.6 28.9 4.8 24 4.8 13.7 4.8 5.3 13.2 5.3 23.5S13.7 42.2 24 42.2 42.7 33.8 42.7 23.5c0-1-.1-2-.3-3z"/><path fill="#FF3D00" d="M6.3 14.7l5.9 4.3C13.9 15.1 18.6 12 24 12c3 0 5.7 1.1 7.7 3l5-5C33.5 6.6 28.9 4.8 24 4.8 16.4 4.8 9.8 9.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 42.2c5.3 0 9.8-1.8 13-4.8l-6-4.9c-2 1.4-4.6 2.3-7 2.3-5.4 0-10-3.4-11.6-8.1l-5.9 4.6C9.8 37.8 16.4 42.2 24 42.2z"/><path fill="#1976D2" d="M43.6 20.5H42v-.1H24v7.2h11.3c-.8 2.2-2.2 4-4 5.3.1-.1 6 4.9 6 4.9l.4.3C40.9 35.4 42.7 29.8 42.7 23.5c0-1-.1-2-.3-3z"/></svg>
                         Continue with Google
                     </a>
@@ -32,7 +32,6 @@
                         <input type="hidden" name="redirect" value="{{ request('redirect') }}">
                     @endif
 
-
                     {{-- Name --}}
                     <div>
                         <x-input-label for="name" :value="__('Name')" />
@@ -46,7 +45,7 @@
                                 required
                                 autofocus
                                 autocomplete="name"
-                                class="block w-full rounded-lg border-gray-300 pl-10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                                class="form-input block w-full rounded-none border-gray-300 pl-10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
                         <x-input-error :messages="$errors->get('name')" class="mt-2" />
@@ -64,7 +63,7 @@
                                 :value="old('email')"
                                 required
                                 autocomplete="username"
-                                class="block w-full rounded-lg border-gray-300 pl-10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                                class="form-input block w-full rounded-none border-gray-300 pl-10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
                         <x-input-error :messages="$errors->get('email')" class="mt-2" />
@@ -81,7 +80,7 @@
                                 name="password"
                                 required
                                 autocomplete="new-password"
-                                class="block w-full rounded-lg border-gray-300 pl-10 pr-10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                                class="form-input block w-full rounded-none border-gray-300 pl-10 pr-10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
                             />
                             <button type="button"
                                     @click="show = !show"
@@ -105,7 +104,7 @@
                                 name="password_confirmation"
                                 required
                                 autocomplete="new-password"
-                                class="block w-full rounded-lg border-gray-300 pl-10 pr-10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
+                                class="form-input block w-full rounded-none border-gray-300 pl-10 pr-10 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
                             />
                             <button type="button"
                                     @click="show2 = !show2"
@@ -118,23 +117,19 @@
                         <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
                     </div>
 
-                    {{-- Terms (optional; remove if not needed) --}}
-                    {{-- <p class="text-xs text-gray-500">By creating an account, you agree to our <a href="#" class="underline">Terms</a> and <a href="#" class="underline">Privacy Policy</a>.</p> --}}
-
                     {{-- Turnstile --}}
                     <div class="cf-turnstile" data-sitekey="{{ config('services.turnstile.sitekey') }}"></div>
                     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-
 
                     {{-- Submit --}}
                     <x-primary-button class="w-full justify-center">
                         {{ __('Register') }}
                     </x-primary-button>
                 </form>
+
                 @error('captcha')
                     <p class="text-red-600 text-sm mt-2">{{ $message }}</p>
                 @enderror
-
 
                 {{-- Footer --}}
                 <p class="mt-6 text-center text-sm text-gray-600">

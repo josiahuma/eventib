@@ -7,36 +7,51 @@
     </x-slot>
 
     <div class="max-w-2xl mx-auto py-8 px-4">
+
+        {{-- Error --}}
         @if(session('error'))
-            <div class="mb-4 p-3 rounded bg-red-50 text-red-700 border border-red-200">
+            <div class="mb-4 border border-rose-200 bg-rose-50 text-rose-700 rounded-xl p-4">
                 {{ session('error') }}
             </div>
         @endif
 
-        <form method="POST" action="{{ route('import.handle') }}" class="space-y-4">
-            @csrf
+        {{-- Card --}}
+        <div class="bg-white border border-slate-200 rounded-xl p-6">
 
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                    Event URL
-                </label>
-                <input type="url" name="url" value="{{ old('url') }}"
-                       class="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
-                       placeholder="https://www.eventbrite.co.uk/e/..."
-                       required>
-                @error('url')
-                    <p class="text-sm text-red-600 mt-1">{{ $message }}</p>
-                @enderror
-            </div>
+            <h3 class="text-lg font-semibold text-slate-900 mb-4">
+                Enter an event URL
+            </h3>
 
-            <button type="submit"
-                    class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700">
-                Fetch details
-            </button>
-        </form>
+            <form method="POST" action="{{ route('import.handle') }}" class="space-y-5">
+                @csrf
 
-        <p class="mt-4 text-sm text-gray-500">
-            We’ll try to read the title, description and location from the page to speed up your event creation.
-        </p>
+                {{-- Event URL --}}
+                <div>
+                    <label class="form-label">Event URL</label>
+
+                    <input
+                        type="url"
+                        name="url"
+                        value="{{ old('url') }}"
+                        required
+                        placeholder="https://www.eventbrite.co.uk/e/..."
+                        class="form-input"
+                    >
+
+                    @error('url')
+                        <p class="text-sm text-rose-600 mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <button type="submit" class="form-primary-btn">
+                    Fetch details
+                </button>
+            </form>
+
+            <p class="form-help mt-5">
+                We’ll try to read the title, description and location from the page to
+                speed up your event creation.
+            </p>
+        </div>
     </div>
 </x-app-layout>

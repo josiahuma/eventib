@@ -4,86 +4,103 @@
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
                 Email registrants — {{ $event->name }}
             </h2>
-            <a href="{{ route('events.registrants', $event) }}" class="text-sm text-gray-600 hover:text-gray-800 underline">
+            <a href="{{ route('events.registrants', $event) }}"
+               class="text-sm text-slate-600 hover:text-slate-900 underline">
                 Back to registrants
             </a>
         </div>
     </x-slot>
 
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {{-- Success --}}
         @if (session('success'))
-            <div class="mb-4 p-3 rounded-lg bg-green-50 text-green-700 border border-green-200">
+            <div class="mb-4 p-3 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
                 {{ session('success') }}
             </div>
         @endif
+
+        {{-- Errors --}}
         @if (session('error'))
             <div class="mb-4 p-3 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
                 {{ session('error') }}
             </div>
         @endif
+
         @if ($errors->any())
             <div class="mb-4 p-3 rounded-lg bg-rose-50 text-rose-700 border border-rose-200">
                 <ul class="list-disc pl-5">
-                    @foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach
+                    @foreach ($errors->all() as $e)
+                        <li>{{ $e }}</li>
+                    @endforeach
                 </ul>
             </div>
         @endif
 
-        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-            <p class="text-sm text-gray-600 mb-4">
+        <div class="form-card shadow-sm">
+
+            <p class="text-sm text-slate-600 mb-3">
                 Sending to <strong>{{ $count }}</strong> registrant{{ $count === 1 ? '' : 's' }}.
             </p>
 
-            <form method="POST" action="{{ route('events.registrants.email.send', $event) }}">
+            <form method="POST" action="{{ route('events.registrants.email.send', $event) }}" class="space-y-6">
                 @csrf
-                <div class="space-y-5">
-                    {{-- Subject --}}
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Subject</label>
-                        <input type="text" name="subject" value="{{ old('subject') }}"
-                            class="mt-1 w-full rounded-lg border-gray-300 focus:ring-2 focus:ring-indigo-500" required>
-                    </div>
 
-                    {{-- Message (Quill Editor) --}}
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                {{-- Subject --}}
+                <div>
+                    <label class="form-label">Subject</label>
+                    <input type="text"
+                           name="subject"
+                           value="{{ old('subject') }}"
+                           class="form-input"
+                           required>
+                </div>
 
-                        <div class="border border-gray-300 rounded-lg overflow-hidden shadow-sm mb-2">
-                            {{-- Quill toolbar --}}
-                            <div id="email-toolbar" class="border-b bg-gray-50 px-2 py-1 text-sm">
-                                <span class="ql-formats">
-                                    <button class="ql-bold"></button>
-                                    <button class="ql-italic"></button>
-                                    <button class="ql-underline"></button>
-                                </span>
-                                <span class="ql-formats">
-                                    <button class="ql-list" value="ordered"></button>
-                                    <button class="ql-list" value="bullet"></button>
-                                </span>
-                                <span class="ql-formats">
-                                    <button class="ql-link"></button>
-                                    <button class="ql-blockquote"></button>
-                                </span>
-                            </div>
+                {{-- Message / Quill --}}
+                <div>
+                    <label class="form-label mb-1">Message</label>
 
-                            {{-- Hidden fields (for submission) --}}
-                            <input type="hidden" name="message" id="email-html" value="{{ old('message') }}">
-                            <input type="hidden" name="message_plain" id="email-plain" value="{{ old('message_plain') }}">
+                    <div class="border border-slate-300 rounded-md shadow-sm overflow-hidden">
 
-                            {{-- Quill editor container --}}
-                            <div id="email-editor" class="min-h-[200px] bg-white overflow-y-auto"></div>
+                        {{-- Quill toolbar --}}
+                        <div id="email-toolbar" class="border-b bg-slate-50 px-2 py-1 text-sm">
+                            <span class="ql-formats">
+                                <button class="ql-bold"></button>
+                                <button class="ql-italic"></button>
+                                <button class="ql-underline"></button>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-list" value="ordered"></button>
+                                <button class="ql-list" value="bullet"></button>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-link"></button>
+                                <button class="ql-blockquote"></button>
+                            </span>
                         </div>
 
-                        <p class="text-xs text-gray-500 mt-1">
-                            Format text, add links and lists. Both HTML and plain text versions will be sent.
-                        </p>
+                        {{-- Hidden submission fields --}}
+                        <input type="hidden" name="message" id="email-html" value="{{ old('message') }}">
+                        <input type="hidden" name="message_plain" id="email-plain" value="{{ old('message_plain') }}">
+
+                        {{-- Editor --}}
+                        <div id="email-editor"
+                             class="min-h-[220px] bg-white overflow-y-auto"></div>
                     </div>
+
+                    <p class="form-help mt-2">
+                        Format text, add links and lists. Both HTML and plain text versions will be sent.
+                    </p>
                 </div>
 
                 {{-- Buttons --}}
-                <div class="mt-6 flex items-center justify-end gap-3">
-                    <a href="{{ route('events.registrants', $event) }}" class="text-sm text-gray-600 hover:text-gray-800">Cancel</a>
-                    <button type="submit" class="inline-flex items-center px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700">
+                <div class="pt-4 flex items-center justify-end gap-3">
+                    <a href="{{ route('events.registrants', $event) }}"
+                       class="text-sm text-slate-600 hover:text-slate-900">
+                        Cancel
+                    </a>
+
+                    <button type="submit" class="form-primary-btn">
                         Send email
                     </button>
                 </div>
@@ -94,12 +111,12 @@
     {{-- Quill CSS --}}
     <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet">
 
-    {{-- Quill Styles --}}
+    {{-- Quill custom styles --}}
     <style>
         #email-editor .ql-editor {
-            min-height: 180px;
-            max-height: 400px;
-            padding: 0.75rem 1rem;
+            min-height: 200px;
+            max-height: 450px;
+            padding: 0.85rem 1rem;
             font-size: 0.95rem;
             color: #111827;
         }
@@ -113,7 +130,7 @@
     {{-- Quill JS --}}
     <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
 
-    {{-- Init Quill --}}
+    {{-- Quill initialisation --}}
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const toolbar = document.getElementById('email-toolbar');
@@ -121,28 +138,23 @@
             const htmlInput = document.getElementById('email-html');
             const plainInput = document.getElementById('email-plain');
 
-            if (!toolbar || !editor || !htmlInput || !plainInput) return;
-
             const quill = new Quill(editor, {
                 theme: 'snow',
                 placeholder: 'Write your message…',
-                modules: { toolbar: toolbar },
+                modules: { toolbar }
             });
 
-            // Prefill existing HTML content
-            const existing = htmlInput.value || '';
-            if (existing.trim() !== '') {
-                quill.clipboard.dangerouslyPasteHTML(existing);
+            // Prefill existing HTML (edit case)
+            if (htmlInput.value.trim() !== '') {
+                quill.clipboard.dangerouslyPasteHTML(htmlInput.value);
             }
 
-            // Convert HTML to plain text
             function htmlToPlain(html) {
                 const div = document.createElement('div');
                 div.innerHTML = html;
                 return div.textContent || div.innerText || '';
             }
 
-            // Sync to hidden fields
             function syncFields() {
                 const html = quill.root.innerHTML.trim();
                 htmlInput.value = html;

@@ -33,7 +33,7 @@
                     </span>
                 </div>
 
-                {{-- Email form --}}
+                {{-- Email + Password form --}}
                 <form method="POST" action="{{ route('login') }}" class="space-y-4">
                     @csrf
 
@@ -52,11 +52,13 @@
                                 <path d="M2 6.75A2.75 2.75 0 0 1 4.75 4h14.5A2.75 2.75 0 0 1 22 6.75v10.5A2.75 2.75 0 0 1 19.25 20H4.75A2.75 2.75 0 0 1 2 17.25V6.75zm2.4-.25L12 11.1l7.6-4.6H4.4z"/>
                             </svg>
                             <input
-                                id="password"
-                                x-bind:type="show ? 'text' : 'password'"
-                                name="password"
+                                id="email"
+                                type="email"
+                                name="email"
+                                value="{{ old('email') }}"
                                 required
-                                autocomplete="current-password"
+                                autofocus
+                                autocomplete="username"
                                 class="form-input rounded-none pl-10 pr-10"
                             />
                         </div>
@@ -71,7 +73,7 @@
                         <div class="relative mt-1">
                             <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400"
                                  viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5zm-3 8V6a3 3 0 1 1 6 0v3H9z"/>
+                                <path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0 2-2h-1V6a5 5 0 0 0-5-5zm-3 8V6a3 3 0 1 1 6 0v3H9z"/>
                             </svg>
                             <input
                                 id="password"

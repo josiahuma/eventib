@@ -64,6 +64,10 @@ return [
         'url' => env('VOICE_SERVICE_URL', 'http://127.0.0.1:8001'),
     ],
 
+    'eventib_public_feed' => [
+        'key' => env('EVENTIB_PUBLIC_FEED_KEY'),
+    ],
+
 
 
 ];

@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\EventApiController;
 use App\Http\Controllers\Api\MobileCheckInController;
 use App\Http\Controllers\VoiceCheckController;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Api\PublicOrganizerEventsController;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:20,1');
 Route::post('/login/google', [AuthController::class, 'loginWithGoogle'])
@@ -33,3 +35,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
 Route::post('/voice-check', [VoiceCheckController::class, 'check'])
     ->name('api.voice.check');
+
+// Public feed for organizers (read-only, no auth, protected by a secret key)
+Route::get('/public/organizers/{organizer}/events', [PublicOrganizerEventsController::class, 'index']);

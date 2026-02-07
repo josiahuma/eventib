@@ -17,122 +17,109 @@ class PublicOrganizerEventsController extends Controller
     public function index(Request $request, string $slug)
     {
         $limit = (int) $request->query('limit', 6);
-        $limit = $limit > 0 ? min($limit, 24) : 6;
 
         // Cache to reduce load
         $cacheKey = "public:organizer-events:{$slug}:{$limit}";
 
-        $payload = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($slug, $limit) {
+        return Cache::remember($cacheKey, now()->addMinutes(5), function () use ($slug, $limit) {
 
-            $organizer = Organizer::query()
-                ->where('slug', $slug)
-                ->firstOrFail();
+            $organizer = Organizer::where('slug', $slug)->firstOrFail();
 
+            // ✅ Pull events for organizer (exclude disabled if exists)
             $events = Event::query()
                 ->where('organizer_id', $organizer->id)
                 ->when(Schema::hasColumn('events', 'is_disabled'), fn ($q) => $q->where('is_disabled', false))
-                ->limit($limit)
                 ->get()
-                ->map(function ($e) use ($organizer) {
-
+                ->map(function ($e) {
                     // -----------------------------
                     // ✅ Banner normalization
-                    // banner_url can be:
-                    // - full URL
-                    // - /storage/...
-                    // - banners/xxx.jpg  (storage-relative)
                     // -----------------------------
-                    $banner = $this->normalizePublicAssetUrl($e->banner_url ?? null);
+                    $rawBanner = $e->banner_url; // full URL, /storage/..., or banners/... etc
+                    $banner = null;
+
+                    if ($rawBanner) {
+                        if (Str::startsWith($rawBanner, ['http://', 'https://'])) {
+                            $banner = $rawBanner;
+                        } elseif (Str::startsWith($rawBanner, '/storage/')) {
+                            $banner = URL::to($rawBanner);
+                        } else {
+                            $banner = URL::to('/storage/' . ltrim($rawBanner, '/'));
+                        }
+                    }
 
                     // -----------------------------
                     // ✅ Avatar normalization (optional)
                     // -----------------------------
-                    $avatar = $this->normalizePublicAssetUrl($e->avatar_url ?? null);
+                    $rawAvatar = $e->avatar_url;
+                    $avatar = null;
+
+                    if ($rawAvatar) {
+                        if (Str::startsWith($rawAvatar, ['http://', 'https://'])) {
+                            $avatar = $rawAvatar;
+                        } elseif (Str::startsWith($rawAvatar, '/storage/')) {
+                            $avatar = URL::to($rawAvatar);
+                        } else {
+                            $avatar = URL::to('/storage/' . ltrim($rawAvatar, '/'));
+                        }
+                    }
 
                     // -----------------------------
-                    // ✅ Next upcoming session (if event_sessions exists)
+                    // ✅ Next upcoming session ONLY
                     // -----------------------------
                     $nextSession = null;
 
                     if (Schema::hasTable('event_sessions')) {
-                        $nowDate = Carbon::now()->toDateString(); // session_date is DATE column
+                        $today = Carbon::today()->toDateString();
 
                         $s = \DB::table('event_sessions')
                             ->where('event_id', $e->id)
-                            ->where('session_date', '>=', $nowDate)
+                            ->where('session_date', '>=', $today) // ✅ only upcoming (today+)
                             ->orderBy('session_date', 'asc')
                             ->first();
 
-                        // If none upcoming, fallback to earliest (optional)
-                        if (! $s) {
-                            $s = \DB::table('event_sessions')
-                                ->where('event_id', $e->id)
-                                ->orderBy('session_date', 'asc')
-                                ->first();
-                        }
-
                         if ($s) {
                             $nextSession = [
-                                'name' => (string) ($s->session_name ?? ''),
-                                'date' => (string) ($s->session_date ?? ''),
-                                'timezone' => (string) ($s->timezone ?? ''),
+                                'name' => $s->session_name,
+                                'date' => $s->session_date,
+                                'timezone' => $s->timezone,
                             ];
                         }
                     }
 
-                    // -----------------------------
-                    // ✅ Tags normalization
-                    // tags is usually json/cast array, but make it safe
-                    // -----------------------------
-                    $tags = $e->tags ?? [];
-                    if (is_string($tags)) {
-                        $decoded = json_decode($tags, true);
-                        $tags = is_array($decoded) ? $decoded : [];
-                    }
-                    if (! is_array($tags)) {
-                        $tags = [];
-                    }
-
-                    // ✅ Fix precedence: public_id fallback
-                    $publicId = $e->public_id ?? $e->id;
-
                     return [
-                        'id' => (string) $publicId,
+                        'id' => (string) ($e->public_id ?? $e->id),
                         'title' => (string) ($e->name ?? ''),
                         'category' => (string) ($e->category ?? ''),
-                        'tags' => $tags,
+                        'tags' => $e->tags ?? [],
                         'banner' => $banner,
                         'avatar' => $avatar,
                         'location' => (string) ($e->location ?? ''),
-                        'next_session' => $nextSession,
+                        'next_session' => $nextSession, // ✅ null if no upcoming session
                         'organizer' => [
-                            'id' => (string) $organizer->id,
-                            'name' => (string) $organizer->name,
-                            'slug' => (string) $organizer->slug,
-                            'avatar_url' => $this->normalizePublicAssetUrl($organizer->avatar_url ?? null),
-                            'website' => (string) ($organizer->website ?? ''),
+                            'id' => (int) $e->organizer_id,
                         ],
-                        // Optional: direct Eventib link if you want to click out
-                        'url' => URL::to('/events/' . (string) $publicId),
                     ];
                 })
-                ->values()
-                ->all();
+                // ✅ Keep ONLY events that actually have an upcoming session
+                ->filter(fn ($e) => !empty($e['next_session']['date']))
+                // ✅ Sort by next session date
+                ->sortBy(fn ($e) => $e['next_session']['date'])
+                // ✅ Limit after filtering/sorting
+                ->take($limit)
+                ->values();
 
-            return [
+            return response()->json([
                 'organizer' => [
-                    'id' => (string) $organizer->id,
-                    'name' => (string) $organizer->name,
-                    'slug' => (string) $organizer->slug,
-                    'avatar_url' => $this->normalizePublicAssetUrl($organizer->avatar_url ?? null),
-                    'website' => (string) ($organizer->website ?? ''),
+                    'id' => $organizer->id,
+                    'name' => $organizer->name,
+                    'slug' => $organizer->slug,
+                    'avatar_url' => $organizer->avatar_url,
                 ],
                 'events' => $events,
-            ];
+            ]);
         });
-
-        return response()->json($payload);
     }
+
 
     /**
      * Convert a stored asset reference into a publicly accessible absolute URL.

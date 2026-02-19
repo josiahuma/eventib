@@ -10,24 +10,28 @@
                 </div>
 
                 <!-- Left links (visible to all) -->
-                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                <!-- Left links (visible to all) -->
+                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex whitespace-nowrap">
                     <x-nav-link :href="route('homepage')" :active="request()->routeIs('homepage')">Home</x-nav-link>
                     <x-nav-link :href="route('events.find')" :active="request()->routeIs('events.find')">Find Events</x-nav-link>
                     <x-nav-link :href="route('how')" :active="request()->routeIs('how')">How it works</x-nav-link>
                     <x-nav-link :href="route('pricing')" :active="request()->routeIs('pricing')">Pricing</x-nav-link>
                     <x-nav-link :href="route('about')" :active="request()->routeIs('about')">About</x-nav-link>
-                    @auth
-                        <x-nav-link :href="route('my.tickets')" :active="request()->routeIs('my.tickets*')">My Tickets</x-nav-link>
-                        <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">Dashboard</x-nav-link>
-                        <x-nav-link :href="route('events.create')" :active="request()->routeIs('events.create')">Create Events</x-nav-link>
-                    @endauth
                     <x-nav-link :href="route('contact')" :active="request()->routeIs('contact')">Contact</x-nav-link>
                 </div>
+
             </div>
 
             <!-- Right side (desktop) -->
-            <div class="hidden sm:flex sm:items-center sm:ms-6">
+            <div class="hidden sm:flex sm:items-center sm:ms-6 space-x-4">
                 @auth
+                 <x-nav-link :href="route('my.tickets')" :active="request()->routeIs('my.tickets*')">My Tickets</x-nav-link>
+                <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">Dashboard</x-nav-link>
+
+                <a href="{{ route('events.create') }}"
+                class="inline-flex items-center rounded-full bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600">
+                    Create event
+                </a>
                     <x-dropdown align="right" width="48">
                         <x-slot name="trigger">
                             <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none transition">
@@ -71,7 +75,7 @@
                         </x-slot>
                     </x-dropdown>
                 @else
-                    <a href="{{ route('login') }}" class="text-gray-600 hover:text-gray-800 px-4">Login</a>
+                     <a href="{{ route('login') }}" class="text-gray-600 hover:text-gray-800 px-4">Login</a>
                     <a href="{{ route('register') }}" class="text-gray-600 hover:text-gray-800">Register</a>
                 @endauth
             </div>

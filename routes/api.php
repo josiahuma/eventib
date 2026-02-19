@@ -4,6 +4,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\EventApiController;
 use App\Http\Controllers\Api\MobileCheckInController;
+use App\Http\Controllers\Api\MobileDashboardController;
+use App\Http\Controllers\Api\EventRegistrantsController;
 use App\Http\Controllers\VoiceCheckController;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Api\PublicOrganizerEventsController;
@@ -29,7 +31,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/check-in', [MobileCheckInController::class, 'checkIn']);
     Route::get('/events/{event:public_id}/checked-in', [MobileCheckInController::class, 'checkedIn']);
 
-    Route::get('/mobile/dashboard', [\App\Http\Controllers\Api\MobileDashboardController::class, 'show']);
+    Route::get('/mobile/dashboard', [MobileDashboardController::class, 'show']);
+
+    Route::get('/events/{event}/registrations', [EventRegistrantsController::class, 'index']);
 
 });
 

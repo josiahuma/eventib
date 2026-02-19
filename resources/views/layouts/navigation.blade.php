@@ -19,7 +19,7 @@
                     @auth
                         <x-nav-link :href="route('my.tickets')" :active="request()->routeIs('my.tickets*')">My Tickets</x-nav-link>
                         <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">Dashboard</x-nav-link>
-                        <x-nav-link :href="route('events.create')" :active="request()->routeIs('events.create')">Create Events</x-nav-link>
+                        <x-nav-link :href="route('events.create')" :active="request()->routeIs('events.create')">Create Event</x-nav-link>
                     @endauth
                     <x-nav-link :href="route('contact')" :active="request()->routeIs('contact')">Contact</x-nav-link>
                 </div>

@@ -35,7 +35,7 @@
                                 disabled>
                             Download PNG
                         </button>
-                        <button type="button" id="btnShare" class="avatar-secondary" disabled>Save / share image</button>
+                        <button type="button" id="btnShare" class="avatar-secondary" disabled>Save / share image (Mobile Phone)</button>
                         <button type="button" id="btnEdit" class="avatar-secondary" disabled>Adjust photo crop</button>
                         <div id="exportPreview" hidden><img id="exportImage" alt="Your finished event avatar"><a id="openImage" target="_blank" rel="noopener">Open full image</a><p>On iPhone, use Save / share image. You can also touch and hold the finished image to see saving options.</p></div>
                         <p id="avatarStatus" role="status" aria-live="polite" class="text-sm text-gray-600 mt-3">Choose a photo to get started. Your photo stays in your browser.</p>

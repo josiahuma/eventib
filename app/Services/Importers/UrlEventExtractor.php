@@ -51,7 +51,7 @@ class UrlEventExtractor
 
     protected function fromMetaTags(string $url): ?array
     {
-        $res = Http::get($url);
+        $res = app(\App\Services\PublicEventFetcher::class)->get($url);
         if (! $res->successful()) {
             return null;
         }

@@ -89,6 +89,8 @@
         </div>
 
 
+        @include('organizers.partials.email-alert-controls')
+
         {{-- Events Section --}}
         <div class="mt-12">
             <h2 class="text-xl font-semibold mb-4">Events</h2>
@@ -96,11 +98,11 @@
             {{-- Tabs: Upcoming / Past --}}
             @php
                 $upcomingEvents = $organizer->events->filter(function ($event) {
-                    return $event->sessions->min('session_date') > now();
+                    return $event->sessions->contains(fn ($session) => \Illuminate\Support\Carbon::parse($session->session_date)->isFuture());
                 });
 
                 $pastEvents = $organizer->events->filter(function ($event) {
-                    return $event->sessions->max('session_date') <= now();
+                    return $event->sessions->isNotEmpty() && !$event->sessions->contains(fn ($session) => \Illuminate\Support\Carbon::parse($session->session_date)->isFuture());
                 });
 
                 $activeTab = request()->get('tab', 'upcoming'); // default to upcoming

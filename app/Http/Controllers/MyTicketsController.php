@@ -72,12 +72,12 @@ class MyTicketsController extends Controller
         }
 
         $event   = $registration->event;
-        $isPaid  = ($event->ticket_cost ?? 0) > 0;
+        $isPaid = (float)$registration->amount > 0 || $registration->items()->exists() || ($event->ticket_cost ?? 0) > 0;
         $status  = strtolower((string) $registration->status);
 
         // hide pending/canceled paid items from edit (defensive in case of deep link)
         if ($isPaid && !in_array($status, $this->paidDone, true)) {
-            return redirect()->route('my.tickets.index')
+            return redirect()->route('my.tickets')
                 ->with('error', 'This ticket is not active yet.');
         }
 
@@ -102,12 +102,12 @@ class MyTicketsController extends Controller
         }
 
         $event   = $registration->event;
-        $isPaid  = ($event->ticket_cost ?? 0) > 0;
+        $isPaid = (float)$registration->amount > 0 || $registration->items()->exists() || ($event->ticket_cost ?? 0) > 0;
         $status  = strtolower((string) $registration->status);
 
         // same defensive guard on update
         if ($isPaid && !in_array($status, $this->paidDone, true)) {
-            return redirect()->route('my.tickets.index')
+            return redirect()->route('my.tickets')
                 ->with('error', 'This ticket is not active yet.');
         }
 
@@ -118,11 +118,14 @@ class MyTicketsController extends Controller
         if (!$isPaid) {
             $rules['party_adults']   = 'nullable|integer|min:0|max:20';
             $rules['party_children'] = 'nullable|integer|min:0|max:20';
+            $rules['child_ages'] = 'nullable|array|max:20';
+            $rules['child_ages.*'] = 'required|integer|min:0|max:17';
             $rules['session_ids']    = 'required|array|min:1';
-            $rules['session_ids.*']  = 'integer|exists:event_sessions,id';
+            $rules['session_ids.*'] = ['integer', 'distinct', \Illuminate\Validation\Rule::exists('event_sessions', 'id')->where(fn ($query) => $query->where('event_id', $event->id))];
         }
 
         $data = $request->validate($rules);
+        if (isset($rules['child_ages']) && count($data['child_ages'] ?? []) !== (int)($data['party_children'] ?? 0)) return back()->withErrors(['child_ages' => 'Please select an age for each child.'])->withInput();
 
         // prevent duplicate email on same event (except self)
         $emailInUse = EventRegistration::where('event_id', $event->id)
@@ -142,6 +145,7 @@ class MyTicketsController extends Controller
         if (!$isPaid) {
             $update['party_adults']   = (int) ($data['party_adults'] ?? 0);
             $update['party_children'] = (int) ($data['party_children'] ?? 0);
+            $update['child_ages'] = array_values($data['child_ages'] ?? []);
 
             // only keep sessions that belong to this event
             $validSessionIds = $event->sessions()

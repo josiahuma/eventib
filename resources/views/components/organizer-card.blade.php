@@ -35,5 +35,6 @@
             @endif
         </div>
     </div>
+    <a href="{{ route('organizers.show', $organizer) }}" class="inline-block mt-4 text-sm font-semibold text-orange-700">Follow & choose event alerts →</a>
 </div>
 @endif

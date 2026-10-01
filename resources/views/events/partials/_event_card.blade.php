@@ -7,9 +7,9 @@
 
     $activeCats = collect($event->categories ?? []);
     $paidPrices = $activeCats->pluck('price')->map(fn($p) => (float) $p)->filter(fn($p) => $p > 0);
-    $isFree     = $paidPrices->isEmpty();
-    $min        = $paidPrices->min();
-    $max        = $paidPrices->max();
+    $isFree = $activeCats->isNotEmpty() ? $paidPrices->isEmpty() : (float)($event->ticket_cost ?? 0) <= 0;
+    $min = $activeCats->isNotEmpty() ? $paidPrices->min() : (float)($event->ticket_cost ?? 0);
+    $max = $activeCats->isNotEmpty() ? $paidPrices->max() : (float)($event->ticket_cost ?? 0);
 
     $cur = strtoupper($event->ticket_currency ?? 'GBP');
     $symbols = [
@@ -45,13 +45,13 @@
 <a href="{{ route('events.show', $event) }}"
    aria-label="{{ $event->name }}"
    class="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-2xl">
-    <div class="relative h-full bg-white rounded-2xl overflow-hidden shadow-sm ring-1 ring-gray-200
+    <div class="ev-event-card relative h-full bg-white rounded-2xl overflow-hidden shadow-sm ring-1 ring-gray-200
                 transition group-hover:shadow-md group-hover:ring-gray-300 group-active:scale-[.99]">
 
         {{-- Media --}}
         <div class="relative">
             @if ($image)
-                <img src="{{ $image }}" alt="{{ $event->name }}" class="h-40 w-full object-cover" loading="lazy" decoding="async">
+                <img src="{{ $image }}" alt="{{ $event->name }}" class="ev-card-media h-40 w-full object-cover" loading="lazy" decoding="async">
             @else
                 <div class="h-40 w-full bg-gradient-to-br from-slate-200 to-slate-100 flex items-center justify-center">
                     <span class="text-slate-500 text-sm">No image</span>

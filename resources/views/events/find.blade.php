@@ -1,12 +1,6 @@
 {{-- resources/views/events/find.blade.php --}}
 <x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            Find events
-        </h2>
-    </x-slot>
-
-    @php
+@php
         $f = $filters ?? [];
         $q        = $f['q']        ?? '';
         $loc      = $f['loc']      ?? '';
@@ -17,6 +11,7 @@
 
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
+        <div class="ev-results-intro"><div class="ev-intro"><p class="ev-kicker">DISCOVER YOUR NEXT GOOD TIME</p><h1>{{ $category ? $category . ' events' : ($price === 'free' ? 'Free events' : 'Discover events') }}</h1><p>{{ $category ? 'Browse upcoming ' . strtolower($category) . ' events and find your next plan.' : 'Choose your city, date and interests to find your next plan.' }}</p></div><a href="{{ route('discovery.saved') }}">♡ Open My Plans →</a></div>
         {{-- Filter bar --}}
         <div class="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
             <form id="filters-form" method="GET" action="{{ route('events.find') }}" class="space-y-4">
@@ -167,7 +162,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     @foreach($events as $event)
                         @php
-                            $firstSession = $event->sessions->sortBy('session_date')->first();
+                            $firstSession = $event->sessions->filter(fn ($session) => \Carbon\Carbon::parse($session->session_date)->gte(now()))->sortBy('session_date')->first();
                             $date = $firstSession ? \Carbon\Carbon::parse($firstSession->session_date) : null;
 
                             $cats = $event->categories ?? collect();

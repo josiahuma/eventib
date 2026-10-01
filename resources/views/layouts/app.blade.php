@@ -34,11 +34,15 @@
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9796795832966785"
      crossorigin="anonymous"></script>
 
+    <link rel="stylesheet" href="{{ asset('css/eventib-experience.css') }}?v=20260930-2">
+
     <style>[x-cloak]{display:none!important}</style>
+
+    <script src="{{ asset('js/eventib-booking.js') }}?v=20261001-2"></script>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="font-sans antialiased bg-gray-100">
+<body class="font-sans antialiased eventib-app ev-page-{{ str_replace('.', '-', request()->route()?->getName() ?? 'page') }}">
     {{-- Fixed nav height = 64px --}}
     @include('layouts.navigation')
 

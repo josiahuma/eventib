@@ -1,12 +1,6 @@
 {{-- resources/views/events/create.blade.php --}}
 <x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            Create Event
-        </h2>
-    </x-slot>
-
-    @php
+@php
         $rawMethods = auth()->user()
             ? auth()->user()->payoutMethods()
                 ->select(['id','type','country','paypal_email','account_name','account_number'])
@@ -38,6 +32,12 @@
         })"
         class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
     >
+        <div class="ev-intro">
+            <p class="ev-kicker">THE ORGANISER STUDIO</p>
+            <h1>Turn your idea into<br>everyone’s next plan.</h1>
+            <p>Set your tickets, tell your story and choose when it happens. Let’s give people something to look forward to.</p>
+            <div class="ev-context"><span><i class="ev-dot" aria-hidden="true"></i> Your event, your community</span><span>Three steps to get started</span></div>
+        </div>
         @if ($errors->any())
             <div class="mb-6 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 p-4">
                 <div class="font-semibold mb-1">Please fix the following:</div>
@@ -50,13 +50,13 @@
         @endif
 
         <div class="mb-6 border-b border-slate-200">
-            <nav class="flex gap-8 text-sm">
+            <nav class="ev-builder-progress flex gap-8 text-sm" aria-label="Event creation steps">
                 <button type="button"
                         @click="goStep(1)"
                         :class="step === 1
                             ? 'text-indigo-600 border-b-2 border-indigo-600 pb-3 -mb-px font-semibold'
                             : 'text-slate-500 hover:text-slate-800 pb-3'">
-                    1) Pricing & payout
+                    01 · Tickets & payout
                 </button>
 
                 <button type="button"
@@ -64,7 +64,7 @@
                         :class="step === 2
                             ? 'text-indigo-600 border-b-2 border-indigo-600 pb-3 -mb-px font-semibold'
                             : 'text-slate-500 hover:text-slate-800 pb-3'">
-                    2) Basics
+                    02 · Your event story
                 </button>
 
                 <button type="button"
@@ -72,11 +72,14 @@
                         :class="step === 3
                             ? 'text-indigo-600 border-b-2 border-indigo-600 pb-3 -mb-px font-semibold'
                             : 'text-slate-500 hover:text-slate-800 pb-3'">
-                    3) Schedule & media
+                    03 · Dates & artwork
                 </button>
             </nav>
         </div>
 
+        <div class="ev-step-label"><strong x-text="'Step ' + step + ' of 3'"></strong><span x-text="step === 1 ? 'Start with tickets' : step === 2 ? 'Make it yours' : 'Bring it to life'"></span></div>
+        <div class="ev-progress-track" aria-hidden="true"><span :style="'width:' + (step / 3 * 100) + '%' "></span></div>
+        <div style="height:24px"></div>
         <form id="create-event-form" action="{{ route('events.store') }}" method="POST" enctype="multipart/form-data" @submit.prevent="validateAndSubmit()">
             @csrf
 
@@ -410,6 +413,8 @@
                 </div>
 
                 {{-- Digital Pass --}}
+                @include('events.partials.faq-editor')
+
                 <div class="form-card">
                     <h3 class="form-section-title">Digital Pass</h3>
 
@@ -587,7 +592,7 @@
                                 Event banner (required)
                             </label>
                             <p class="form-help mb-2">
-                                Recommended 1200×300 (4:1). You can upload a file or use the imported banner.
+                                JPG or PNG, up to 12 MB. Recommended 1200×300 (4:1). You can upload a file or use the imported banner.
                             </p>
 
                             <input

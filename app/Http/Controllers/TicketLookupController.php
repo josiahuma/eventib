@@ -50,7 +50,7 @@ class TicketLookupController extends Controller
         $registration = EventRegistration::where('event_id', $event->id)
             ->findOrFail($reg);
 
-        $isFreeEvent = ($event->ticket_cost ?? 0) == 0;
+        $isFreeEvent = (float)$registration->amount <= 0 && !$registration->items()->exists() && ($event->ticket_cost ?? 0) <= 0;
 
         return view('tickets.edit', [
             'event'        => $event,
@@ -67,12 +67,15 @@ class TicketLookupController extends Controller
             ->findOrFail($reg);
 
         $rules = ['email' => 'required|email'];
-        if (($event->ticket_cost ?? 0) == 0) {
+        if ((float)$registration->amount <= 0 && !$registration->items()->exists() && ($event->ticket_cost ?? 0) <= 0) {
             $rules['party_adults']   = 'nullable|integer|min:0|max:20';
             $rules['party_children'] = 'nullable|integer|min:0|max:20';
+            $rules['child_ages'] = 'nullable|array|max:20';
+            $rules['child_ages.*'] = 'required|integer|min:0|max:17';
         }
 
         $data = $request->validate($rules);
+        if (isset($rules['child_ages']) && count($data['child_ages'] ?? []) !== (int)($data['party_children'] ?? 0)) return back()->withErrors(['child_ages' => 'Please select an age for each child.'])->withInput();
 
         // Prevent duplicate email on the same event (except the same row)
         $emailInUse = EventRegistration::where('event_id', $event->id)
@@ -88,9 +91,10 @@ class TicketLookupController extends Controller
 
         $update = ['email' => $data['email']];
 
-        if (($event->ticket_cost ?? 0) == 0) {
+        if ((float)$registration->amount <= 0 && !$registration->items()->exists() && ($event->ticket_cost ?? 0) <= 0) {
             $update['party_adults']   = (int) ($data['party_adults'] ?? 0);
             $update['party_children'] = (int) ($data['party_children'] ?? 0);
+            $update['child_ages'] = array_values($data['child_ages'] ?? []);
         }
 
         $registration->update($update);

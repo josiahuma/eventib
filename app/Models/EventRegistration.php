@@ -20,6 +20,7 @@ class EventRegistration extends Model
         'quantity',
         'party_adults',
         'party_children',
+        'child_ages',
         'currency',
 
         // voice legacy fields
@@ -44,6 +45,7 @@ class EventRegistration extends Model
     ];
 
     protected $casts = [
+        'child_ages' => 'array',
         'amount'                   => 'decimal:2',
         'platform_fee'             => 'decimal:2',
         'created_at'               => 'datetime',

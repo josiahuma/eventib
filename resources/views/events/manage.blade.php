@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between">
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Manage Events</h2>
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div><h2 class="font-semibold text-xl text-gray-800 leading-tight">Manage Events</h2><p class="ev-dashboard-subtitle">Your events, their bookings and what happens next—all in one place.</p></div>
             <a href="{{ route('events.create') }}"
                class="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">

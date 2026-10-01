@@ -1,11 +1,8 @@
 <x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            Register for {{ $event->name }}
-        </h2>
-    </x-slot>
-
-    @php
+@php
+        $bookingSelection = $bookingSelection ?? [];
+        $initialSessions = session()->hasOldInput() ? old('session_ids', []) : ($bookingSelection['session_ids'] ?? []);
+        $initialSessions = is_array($initialSessions) ? $initialSessions : [];
         $cats    = $event->categories ?? collect();
         $hasCats = $cats->count() > 0;
 
@@ -36,6 +33,8 @@
 
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
+        <div class="ev-intro"><p class="ev-kicker">MAKE IT A PLAN</p><h1>You’re one step closer.</h1><p>Register for <strong>{{ $event->name }}</strong>.</p><div class="ev-context"><a href="{{ route('events.show', $event) }}">← Back to event details</a></div></div>
+        <div class="ev-registration-note">Check your session and ticket selection below before confirming your registration.</div>
         {{-- alerts --}}
         @if (session('success'))
             <div class="mb-6 border border-emerald-200 bg-emerald-50 text-emerald-700 rounded-xl p-4">
@@ -106,65 +105,21 @@
                 method="POST"
                 class="mt-6 space-y-6"
                 x-data="ticketForm({
+                    feeBps: {{ $event->feeMode() === 'pass' ? max(0, (int)($event->fee_bps ?? 590)) : 0 }},
                     mode: '{{ $mode }}',
                     sym: '{{ $sym }}',
                     unit: {{ $unit }},
                     cats: @js($cats->map(fn($c) => ['id' => $c->id, 'name' => $c->name, 'price' => (float)$c->price])->values()),
-                    oldCats: @js(old('categories', [])),
-                    initQty: {{ (int) old('quantity', 1) }},
-                    initA: {{ (int) old('party_adults', 0) }},
-                    initC: {{ (int) old('party_children', 0) }},
+                    oldCats: @js(old('categories', $bookingSelection['categories'] ?? [])),
+                    initQty: {{ (int) old('quantity', $bookingSelection['quantity'] ?? 1) }},
+                    initA: {{ (int) old('party_adults', $bookingSelection['party_adults'] ?? 0) }},
+                    initC: {{ (int) old('party_children', $bookingSelection['party_children'] ?? 0) }},
+                    childAges: @js(old('child_ages', $bookingSelection['child_ages'] ?? [])),
+                    selectedSessions: @js(array_map('strval', $initialSessions)),
                 })"
                 x-init="init()"
             >
                 @csrf
-
-                {{-- Attendee details --}}
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="form-label">Full name</label>
-                        <input
-                            type="text"
-                            name="name"
-                            required
-                            value="{{ old('name', optional(auth()->user())->name) }}"
-                            class="form-input"
-                        >
-                        @error('name')
-                            <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div>
-                        <label class="form-label">Email</label>
-                        <input
-                            type="email"
-                            name="email"
-                            required
-                            value="{{ old('email', optional(auth()->user())->email) }}"
-                            class="form-input"
-                        >
-                        @if(Auth::check() && !empty($alreadyRegistered))
-                            <p class="text-xs text-rose-600 mt-1">You are already registered for this event.</p>
-                        @endif
-                        @error('email')
-                            <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    <div class="md:col-span-2">
-                        <label class="form-label">Mobile (optional)</label>
-                        <input
-                            type="text"
-                            name="mobile"
-                            value="{{ old('mobile') }}"
-                            class="form-input"
-                        >
-                        @error('mobile')
-                            <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
-                        @enderror
-                    </div>
-                </div>
 
                 {{-- Sessions --}}
                 <div>
@@ -176,7 +131,8 @@
                                     type="checkbox"
                                     name="session_ids[]" value="{{ $s->id }}"
                                     class="form-checkbox h-4 w-4"
-                                    @checked(in_array($s->id, old('session_ids', [])))
+                                    x-model="selectedSessions"
+                                    @checked(in_array($s->id, $initialSessions))
                                 >
                                 <div>
                                     <div class="text-sm font-medium text-slate-900">
@@ -216,13 +172,13 @@
                                         <button
                                             type="button"
                                             class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
-                                            @click="decCat({{ $c->id }})"
+                                            aria-label="Remove one {{ $c->name }} ticket" @click="decCat({{ $c->id }})"
                                         >−</button>
                                         <div class="w-6 text-center font-semibold" x-text="catQty[{{ $c->id }}] ?? 0"></div>
                                         <button
                                             type="button"
                                             class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
-                                            @click="incCat({{ $c->id }})"
+                                            aria-label="Add one {{ $c->name }} ticket" @click="incCat({{ $c->id }})"
                                         >+</button>
                                     </div>
 
@@ -262,13 +218,13 @@
                             <button
                                 type="button"
                                 class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
-                                @click="dec('qty')"
+                                aria-label="Remove one ticket" @click="dec('qty')"
                             >−</button>
                             <div class="text-lg font-semibold" x-text="qty"></div>
                             <button
                                 type="button"
                                 class="px-2.5 py-1.5 text-sm border border-slate-300 rounded-md"
-                                @click="inc('qty')"
+                                aria-label="Add one ticket" @click="inc('qty')"
                             >+</button>
                         </div>
 
@@ -342,7 +298,55 @@
                             <span class="font-medium" x-text="1 + adults + children"></span>
                         </div>
                     </div>
-                @endif
+                @include('events.partials.child-ages')
+                    @endif
+
+                {{-- Attendee details --}}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="form-label">Full name</label>
+                        <input
+                            type="text"
+                            name="name"
+                            required
+                            value="{{ old('name', optional(auth()->user())->name) }}"
+                            class="form-input"
+                        >
+                        @error('name')
+                            <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <label class="form-label">Email</label>
+                        <input
+                            type="email"
+                            name="email"
+                            required
+                            value="{{ old('email', optional(auth()->user())->email) }}"
+                            class="form-input"
+                        >
+                        @if(Auth::check() && !empty($alreadyRegistered))
+                            <p class="text-xs text-rose-600 mt-1">You are already registered for this event.</p>
+                        @endif
+                        @error('email')
+                            <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="form-label">Mobile (optional)</label>
+                        <input
+                            type="text"
+                            name="mobile"
+                            value="{{ old('mobile') }}"
+                            class="form-input"
+                        >
+                        @error('mobile')
+                            <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
 
                 {{-- Digital pass section for logged-in users --}}
                 @if(auth()->check())
@@ -401,6 +405,14 @@
                     @endif
                 @endif
 
+                <div class="rounded-2xl border bg-orange-50 p-5" aria-live="polite">
+                    <h2 class="font-semibold mb-3">Your booking summary</h2>
+                    <div class="flex justify-between text-sm"><span>Ticket subtotal</span><span x-text="sym + (subtotalMinor()/100).toFixed(2)"></span></div>
+                    <div class="flex justify-between text-sm mt-2"><span>Booking fee</span><span x-text="sym + (feeMinor()/100).toFixed(2)"></span></div>
+                    <div class="flex justify-between mt-3 pt-3 border-t"><strong>Estimated total</strong><strong x-text="sym + ((subtotalMinor()+feeMinor())/100).toFixed(2)"></strong></div>
+                    <p class="form-help mt-3">Your tickets apply to all selected sessions. Final payment amounts are calculated securely when you continue.</p>
+                </div>
+
                 {{-- footer actions --}}
                 <div class="flex items-center justify-end gap-3 pt-2">
                     <a
@@ -412,7 +424,7 @@
 
                     <button
                         type="submit"
-                        :disabled="mode==='cats' && totalQty()===0"
+                        :disabled="selectedSessions.length === 0 || (mode==='cats' && totalQty()===0)"
                         class="form-primary-btn disabled:opacity-50"
                     >
                         <span x-text="submitLabel()"></span>
@@ -433,8 +445,11 @@
                 qty: Math.max(1, Math.min(MAX, cfg.initQty || 1)),
                 adults: Math.max(0, Math.min(20, cfg.initA || 0)),
                 children: Math.max(0, Math.min(20, cfg.initC || 0)),
+                childAges: (cfg.childAges || []).slice(),
+                syncChildAges() { this.childAges = Array.from({length:this.children}, (_,i) => this.childAges[i] ?? ""); },
                 cats: cfg.cats || [],
                 catQty: {},
+                selectedSessions: (cfg.selectedSessions || []).map(String),
 
                 // Voice Pass state (unchanged)
                 voiceEnabled: false,
@@ -446,10 +461,12 @@
                 audioChunks: [],
 
                 init() {
+                    this.syncChildAges();
+                    this.$watch?.("children", () => this.syncChildAges());
                     const old = cfg.oldCats || {};
                     this.cats.forEach(c => {
                         const v = parseInt(old[c.id] ?? 0, 10);
-                        this.catQty[c.id] = Number.isFinite(v) ? Math.max(0, v) : 0;
+                        this.catQty[c.id] = Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0;
                     });
                 },
 
@@ -464,7 +481,7 @@
                     if (what === 'children') this.children = Math.max(0, this.children - 1);
                 },
 
-                incCat(id) { this.catQty[id] = (this.catQty[id] || 0) + 1; },
+                incCat(id) { this.catQty[id] = Math.min(100, (this.catQty[id] || 0) + 1); },
                 decCat(id) { this.catQty[id] = Math.max(0, (this.catQty[id] || 0) - 1); },
                 totalQty() {
                     if (this.mode !== 'cats') return this.qty;
@@ -474,6 +491,12 @@
                     if (this.mode !== 'cats') return this.unit * this.qty;
                     return this.cats.reduce((sum, c) => sum + (c.price * (this.catQty[c.id] || 0)), 0);
                 },
+                subtotalMinor() {
+                    if (this.mode === 'free') return 0;
+                    if (this.mode === 'single') return Math.round(this.unit * 100) * this.qty;
+                    return this.cats.reduce((sum,c) => sum + Math.round(c.price * 100) * (this.catQty[c.id] || 0),0);
+                },
+                feeMinor() { return Math.round(this.subtotalMinor() * (cfg.feeBps || 0) / 10000); },
                 submitLabel() {
                     if (this.mode === 'cats') return this.total() > 0 ? 'Proceed to Payment' : 'Register';
                     return this.unit > 0 ? 'Proceed to Payment' : 'Register';

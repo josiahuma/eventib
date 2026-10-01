@@ -51,6 +51,8 @@
                                 </x-dropdown-link>
                                 <div class="my-1 border-t border-gray-100"></div>
                             @endif
+                            <x-dropdown-link :href="route('organizer-alerts.index')">Event alerts</x-dropdown-link>
+                            <x-dropdown-link :href="route('discovery.saved')">My Plans</x-dropdown-link>
                             <x-dropdown-link :href="route('profile.edit')">Profile</x-dropdown-link>
                             <x-dropdown-link :href="route('digital-pass.setup')">Digital Pass</x-dropdown-link>
                             <x-dropdown-link :href="route('profile.payouts')">Add Payout methods</x-dropdown-link>
@@ -121,7 +123,8 @@
 
             <div class="px-4 py-3">
                 <div class="space-y-1">
-                    <x-responsive-nav-link :href="route('homepage')" :active="request()->routeIs('homepage')">Home</x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('discovery.saved')" :active="request()->routeIs('discovery.saved')">My Plans</x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('homepage')" :active="request()->routeIs('homepage')">Home</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('events.find')" :active="request()->routeIs('events.find')">Find Events</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('how')" :active="request()->routeIs('how')">How it works</x-responsive-nav-link>
                     <x-responsive-nav-link :href="route('pricing')" :active="request()->routeIs('pricing')">Pricing</x-responsive-nav-link>
@@ -150,6 +153,7 @@
                                     </span>
                                 </x-responsive-nav-link>
                             @endif
+                            <x-responsive-nav-link :href="route('organizer-alerts.index')">Event alerts</x-responsive-nav-link>
                             <x-responsive-nav-link :href="route('profile.edit')">Profile</x-responsive-nav-link>
                             <x-responsive-nav-link :href="route('digital-pass.setup')">Digital Pass</x-responsive-nav-link>
                             <x-responsive-nav-link :href="route('profile.payouts')">Add Payout methods</x-responsive-nav-link>

@@ -1,17 +1,6 @@
 {{-- resources/views/events/edit.blade.php --}}
 <x-app-layout>
-    <x-slot name="header">
-        <div class="flex items-center justify-between">
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                Edit Event — {{ $event->name }}
-            </h2>
-            <a href="{{ route('dashboard') }}" class="text-sm text-gray-600 hover:text-gray-800 underline">
-                Back to dashboard
-            </a>
-        </div>
-    </x-slot>
-
-    @php
+@php
         // Tags -> array (for multiselect)
         $raw = $event->tags;
         if (is_array($raw)) {
@@ -84,6 +73,7 @@
         })"
         class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
     >
+        <div class="ev-intro"><p class="ev-kicker">THE ORGANISER STUDIO</p><h1>Keep your plan looking fresh.</h1><p>Update {{ $event->name }}. Your existing event link stays the same.</p><div class="ev-context"><a href="{{ route('events.show', $event) }}">View event ↗</a><a href="{{ route('events.manage') }}">Manage events →</a></div></div>
         @if ($errors->any())
             <div class="mb-6 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 p-4">
                 <div class="font-semibold mb-1">Please fix the following:</div>
@@ -97,13 +87,13 @@
 
         {{-- Top nav, same as create --}}
         <div class="mb-6 border-b border-slate-200">
-            <nav class="flex gap-8 text-sm">
+            <nav class="ev-builder-progress flex gap-8 text-sm" aria-label="Event editing steps">
                 <button type="button"
                         @click="goStep(1)"
                         :class="step === 1
                             ? 'text-indigo-600 border-b-2 border-indigo-600 pb-3 -mb-px font-semibold'
                             : 'text-slate-500 hover:text-slate-800 pb-3'">
-                    1) Pricing & payout
+                    01 · Tickets & payout
                 </button>
 
                 <button type="button"
@@ -111,7 +101,7 @@
                         :class="step === 2
                             ? 'text-indigo-600 border-b-2 border-indigo-600 pb-3 -mb-px font-semibold'
                             : 'text-slate-500 hover:text-slate-800 pb-3'">
-                    2) Basics
+                    02 · Your event story
                 </button>
 
                 <button type="button"
@@ -119,7 +109,7 @@
                         :class="step === 3
                             ? 'text-indigo-600 border-b-2 border-indigo-600 pb-3 -mb-px font-semibold'
                             : 'text-slate-500 hover:text-slate-800 pb-3'">
-                    3) Schedule & media
+                    03 · Dates & artwork
                 </button>
             </nav>
         </div>
@@ -246,6 +236,7 @@
 
             {{-- STEP 2 — Basics + Digital Pass --}}
             <section x-show="step === 2" x-cloak class="space-y-6">
+                @include('events.partials.faq-editor')
                 {{-- Basics --}}
                 <div class="form-card">
                     <h3 class="form-section-title">Basics</h3>
@@ -556,7 +547,7 @@
                         <div>
                             <label class="form-label">Event banner (replace)</label>
                             <p class="form-help mb-2">
-                                Recommended 1200×300 (4:1). Upload a new file to replace the current banner.
+                                JPG or PNG, up to 12 MB. Recommended 1200×300 (4:1). Upload a new file to replace the current banner.
                             </p>
 
                             <label class="file-input-modern">

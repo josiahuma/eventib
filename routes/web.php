@@ -155,7 +155,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard/organizers', [OrganizerController::class, 'index'])->name('organizers.index');
     Route::get('/dashboard/organizers/create', [OrganizerController::class, 'create'])->name('organizers.create');
     Route::post('/dashboard/organizers', [OrganizerController::class, 'store'])->name('organizers.store');
-    Route::get('/dashboard/organizers/{organizer}/edit', [OrganizerController::class, 'edit'])->name('organizers.edit');
+    Route::get('/dashboard/organizers/{organizer}/edit', [OrganizerController::class, 'edit'])->name('organizers.dashboard.edit');
     Route::post('/organizers/{organizer}/follow', [OrganizerController::class, 'follow'])
     ->middleware('auth')->name('organizers.follow');
     Route::post('/organizers/{organizer}/unfollow', [OrganizerController::class, 'unfollow'])
@@ -186,14 +186,12 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/events/{event}/scan', [TicketController::class, 'scanValidate'])->name('tickets.scan.validate');
 
     // Scanner alias for older links
-    Route::get('/events/{event}/tickets/scan', [TicketController::class, 'scanPage'])->name('tickets.scan');
+    Route::get('/events/{event}/tickets/scan', [TicketController::class, 'scanPage'])->name('tickets.scan.legacy');
 
     // Check-ins list (organiser)
     Route::get('/events/{event}/checkins', [CheckinsController::class, 'index'])->name('events.checkins.index');
 
     // (Optional) organiser: per-event ticket list + export
-    Route::get('/events/{event}/tickets',             [TicketController::class, 'eventIndex'])->name('events.tickets.index');
-    Route::get('/events/{event}/tickets/export-pdf',  [TicketController::class, 'exportPdf'])->name('events.tickets.export-pdf');
 
     // Digital Pass setup
     // Wizard page
@@ -210,17 +208,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/digital-pass', [DigitalPassController::class, 'show'])
         ->name('digital-pass.show');
 
-    Route::post('/digital-pass/voice-sample', [DigitalPassController::class, 'storeVoiceSample'])
-        ->name('digital-pass.voice.sample');
 
-    Route::post('/digital-pass/voice-finalize', [DigitalPassController::class, 'finalizeVoice'])
-        ->name('digital-pass.voice.finalize');
 
-    Route::post('/digital-pass/face-sample', [DigitalPassController::class, 'storeFaceSample'])
-        ->name('digital-pass.face.sample');
 
-    Route::post('/digital-pass/face-finalize', [DigitalPassController::class, 'finalizeFace'])
-        ->name('digital-pass.face.finalize');
 
     Route::get('/events/{event}/digital-checkin', [TicketController::class, 'digitalCheckinPage'])
         ->name('tickets.digital.checkin');
@@ -253,7 +243,7 @@ Route::middleware(['auth'])->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::get('/events/{event}/ticket',                 [TicketLookupController::class, 'showForm'])->name('events.ticket.find');
-Route::post('/events/{event}/ticket',                [TicketLookupController::class, 'sendLink'])->name('events.ticket.sendlink');
+Route::post('/events/{event}/ticket',                [TicketLookupController::class, 'sendLink'])->middleware('throttle:5,1')->name('events.ticket.sendlink');
 Route::get('/events/{event}/ticket/manage/{reg}',    [TicketLookupController::class, 'edit'])->name('events.ticket.edit');
 Route::post('/events/{event}/ticket/manage/{reg}',   [TicketLookupController::class, 'update'])->name('events.ticket.update');
 
@@ -265,6 +255,19 @@ Route::get('/events/{event}/register/result', [RegistrationController::class, 'r
 /* Sitemap */
 Route::get('/sitemap',     [SitemapController::class, 'index']);
 Route::get('/sitemap.xml', [SitemapController::class, 'index'])->name('sitemap');
+
+// Discovery and sharing. Keep these before the public event detail route.
+Route::get('/my-plans', [\App\Http\Controllers\EventDiscoveryController::class, 'saved'])
+    ->middleware('auth')->name('discovery.saved');
+Route::post('/events/{event}/save', [\App\Http\Controllers\EventDiscoveryController::class, 'save'])
+    ->middleware(['auth', 'throttle:60,1'])->name('discovery.save');
+Route::get('/events/{event}/share-studio', [\App\Http\Controllers\EventDiscoveryController::class, 'share'])
+    ->name('discovery.share');
+
+Route::get('/events/{event}/sessions/{session}/calendar', [\App\Http\Controllers\EventCalendarController::class, 'download'])->name('events.calendar');
+Route::get('/organizer-alerts', [\App\Http\Controllers\OrganizerAlertController::class, 'index'])->middleware('auth')->name('organizer-alerts.index');
+Route::post('/organizers/{organizer}/email-alerts', [\App\Http\Controllers\OrganizerAlertController::class, 'update'])->middleware(['auth', 'throttle:30,1'])->name('organizer-alerts.update');
+Route::match(['get', 'post'], '/organizer-alerts/unsubscribe/{subscription}', [\App\Http\Controllers\OrganizerAlertController::class, 'unsubscribe'])->middleware(['signed', 'throttle:30,1'])->name('organizer-alerts.unsubscribe');
 
 /* Public event show (after resource routes) */
 Route::get('/events/{event}', [EventController::class, 'show'])

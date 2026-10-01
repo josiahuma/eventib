@@ -11,9 +11,15 @@ use App\Mail\OrganizerFollowedMail;
 
 class OrganizerController extends Controller
 {
+    public function index()
+    {
+        $organizers = Organizer::where('user_id', auth()->id())->orderBy('name')->get();
+        return view('organizers.index', compact('organizers'));
+    }
+
     public function show($slug)
     {
-        $organizer = Organizer::where('slug', $slug)->with('events')->firstOrFail();
+        $organizer = Organizer::where('slug', $slug)->with(['events' => fn ($q) => $q->where('is_disabled', false)->with(['sessions', 'categories' => fn ($q) => $q->where('is_active', true)])])->firstOrFail();
         return view('organizers.show', compact('organizer'));
     }
 
@@ -64,10 +70,10 @@ class OrganizerController extends Controller
     public function follow(Organizer $organizer)
     {
         $user = auth()->user();
-        $user->followedOrganizers()->syncWithoutDetaching([$organizer->id]);
+        $attached = $user->followedOrganizers()->syncWithoutDetaching([$organizer->id]);
 
         // ✨ Hook point
-        if ($organizer->user?->email) {
+        if (!empty($attached['attached']) && $organizer->user?->email) {
             Mail::to($organizer->user->email)->queue(
                 new OrganizerFollowedMail($organizer, $user)
             );
@@ -80,6 +86,11 @@ class OrganizerController extends Controller
     {
         $user = auth()->user();
         $user->followedOrganizers()->detach($organizer->id);
+        $subscription = \Illuminate\Support\Facades\DB::table('organizer_alert_subscriptions')->where('user_id', $user->id)->where('organizer_id', $organizer->id)->first();
+        if ($subscription) {
+            \Illuminate\Support\Facades\DB::table('organizer_alert_subscriptions')->where('id', $subscription->id)->update(['enabled' => false, 'enabled_at' => null, 'updated_at' => now()]);
+            \Illuminate\Support\Facades\DB::table('organizer_event_alerts')->where('subscription_id', $subscription->id)->where('status', 'pending')->update(['status' => 'skipped', 'updated_at' => now()]);
+        }
 
         return back()->with('success', 'You have unfollowed this organizer.');
     }

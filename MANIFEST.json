@@ -1,0 +1,114 @@
+[
+  {
+    "file": "REVIEW-REPORT.md",
+    "sha256": "cf21cf1389fcc5c2048cd55ca2702c094b45990145612fa27959ef132adfcf6e"
+  },
+  {
+    "file": "START-HERE.md",
+    "sha256": "4852a224e62a7c1ec6743e8e6c22901a33da9ddf5ef6832849fbcddd15016932"
+  },
+  {
+    "file": "app/Http/Controllers/Admin/HomepageSponsorController.php",
+    "sha256": "22ff3eb0c3bafbf9a3d160034f382b8ac1d281ea8fc8b67476badbfe81b1db63"
+  },
+  {
+    "file": "app/Http/Controllers/EventController.php",
+    "sha256": "eec1dd56f53d6435eba863b978d95d695a56c1a8ee3cd0fd78527c50a34c79d0"
+  },
+  {
+    "file": "app/Http/Controllers/EventImportController.php",
+    "sha256": "a0b48d05c8ab6f9302f7a15028ab1608c8c79246bba9407549dfac60fa434df9"
+  },
+  {
+    "file": "app/Http/Controllers/MyTicketsController.php",
+    "sha256": "66e6c3bcd9af039da375a1d41c4595867a21b5cc3acd82b01792a41ae3fc90c5"
+  },
+  {
+    "file": "app/Http/Controllers/OrganizerController.php",
+    "sha256": "3b148f488b2d3ac83b50a383226b2c1dd706f9f4f9158a640d01af27f9142921"
+  },
+  {
+    "file": "app/Http/Controllers/PayoutController.php",
+    "sha256": "4758f8fa04f4e7947733ed19389bf382b5fa8d22a09d68c394b16a45c969a2e3"
+  },
+  {
+    "file": "app/Http/Controllers/RegistrantsController.php",
+    "sha256": "f0dbfd363e4a99b753b886f3aaa398e956a622cefac5727fedef7c97be951134"
+  },
+  {
+    "file": "app/Http/Controllers/RegistrationController.php",
+    "sha256": "b1add375e7b7b739eceedb3f79815ebfa82a4713cdb9b604bf75cc5787274f54"
+  },
+  {
+    "file": "app/Http/Controllers/StripeWebhookController.php",
+    "sha256": "ef2268c8490ad1f4c9ceb36c33d09132c83c529b150fe6197fcd0f600235e43d"
+  },
+  {
+    "file": "app/Http/Controllers/TicketController.php",
+    "sha256": "cc41ca5d354e22473de2736c1fea7a26fcd5f0de1bc96c7e2ef4038d0e545c30"
+  },
+  {
+    "file": "app/Http/Controllers/TicketLookupController.php",
+    "sha256": "4f26a0406aa429b7193044d90e1e67599bff2be74cda6475437bd29b2f0eeb9f"
+  },
+  {
+    "file": "app/Services/Importers/UrlEventExtractor.php",
+    "sha256": "2b1d8287a4e9a66153a4a0dd972b1003109f886d10de9c3b31925a5119b40ee3"
+  },
+  {
+    "file": "app/Services/PublicEventFetcher.php",
+    "sha256": "901c7acf4d8a815c6049a6bc47c4f460a489f058470a07aeb77124927c47a925"
+  },
+  {
+    "file": "app/Services/SafeEventDescription.php",
+    "sha256": "5b1b8c2155583590f96cf419772c80f312e82fb0bc2f22bb4d4ca585f1d7719c"
+  },
+  {
+    "file": "public/css/eventib-experience.css",
+    "sha256": "eac2d32febe6a74efc28277df8db1aa3de4bad9dba53d26d1c0cb06d7737cb95"
+  },
+  {
+    "file": "public/css/eventib-home.css",
+    "sha256": "2e61e130ba27e696910e07b1b5d32fcdaa0239faef933feb87653cfc3226a144"
+  },
+  {
+    "file": "public/images/eventib-community-hero.png",
+    "sha256": "44f3a5492ba7b191eb0f2d3ca01a1c9546adb3ec07a99b5474761f24f092c744"
+  },
+  {
+    "file": "public/js/eventib-booking.js",
+    "sha256": "9af29b760daab5af2b913fcfe11ae8b15f9deee23aa270f35f5002c10655c381"
+  },
+  {
+    "file": "resources/views/events/find.blade.php",
+    "sha256": "992c5fa31a951331b8b1cf0f43c8faa054a2b416f51bd1ac18e7afc1cd9b0359"
+  },
+  {
+    "file": "resources/views/events/partials/_event_card.blade.php",
+    "sha256": "47ae2e35853f9d1ea561ea205985e7034f8d0f579acabf2ed84afd0d1ad664de"
+  },
+  {
+    "file": "resources/views/events/show.blade.php",
+    "sha256": "a821a457a44581f99973cb6f845d73fb6e092a328d8db9d6bbf89c5d9ee049f7"
+  },
+  {
+    "file": "resources/views/organizers/index.blade.php",
+    "sha256": "c67874bdafb39b34cb15af19469b3eeda26904557095cb9afa6dc9a9020379be"
+  },
+  {
+    "file": "routes/web.php",
+    "sha256": "ff1fd0e16143e072768c3a992a8d67732353f822e0a91904b4e6bf225caefadb"
+  },
+  {
+    "file": "tests/Feature/EventReleaseReviewTest.php",
+    "sha256": "07c2331c5a9c5fb014faff333e8a6bce92a93bf477b3977c2715a0e265330b09"
+  },
+  {
+    "file": "tests/Frontend/eventib-booking-check.cjs",
+    "sha256": "626468d452a89af3dafb7353705a49f6b9f48a6c39c6af4715e0136c16df9f0f"
+  },
+  {
+    "file": "tools/eventib-preflight.ps1",
+    "sha256": "961de1b3b33b3faa62afee5c671ed8d17c8fbb03b87dd11bd51aa8549f260598"
+  }
+]

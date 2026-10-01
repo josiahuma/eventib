@@ -65,6 +65,8 @@ class TicketController extends Controller
         abort_unless($registration->event_id === $event->id, 404);
         $this->authorizeRegistration($registration);
 
+        abort_unless($registration->status === 'free' || ($registration->status === null && (float)$registration->amount <= 0), 403, 'This registration does not have an active free pass.');
+
         // Ensure qr_token exists
         if (empty($registration->qr_token)) {
             $registration->qr_token = \Illuminate\Support\Str::random(40);
@@ -72,7 +74,7 @@ class TicketController extends Controller
         }
 
         $payload = "FR|v1|{$event->public_id}|{$registration->id}|{$registration->qr_token}";
-        $party   = 1
+        $party   = ($registration->items()->exists() ? max(1, (int)$registration->quantity) : 1)
             + (int)($registration->party_adults ?? 0)
             + (int)($registration->party_children ?? 0);
 
@@ -329,6 +331,7 @@ class TicketController extends Controller
 
             // Ensure we have the parent registration loaded
             $reg = $ticket->registration; // assumes relation exists
+            if (!$reg || !in_array(strtolower((string)$reg->status), ['paid','complete','completed','succeeded'], true)) return response()->json(['ok' => false, 'reason' => 'Registration is not paid'], 422);
 
             $already = (bool) $ticket->checked_in_at;
             if (!$already) {
@@ -377,27 +380,14 @@ class TicketController extends Controller
                 return response()->json(['ok' => false, 'reason' => 'Wrong event'], 422);
             }
 
-            // ✅ Match either qr_token or expectedFreePassToken() for backward compatibility
-            $reg = EventRegistration::where('event_id', $event->id)
-                ->where(function ($q) use ($regId, $token) {
-                    $q->where('id', $regId)
-                    ->where(function ($qq) use ($token) {
-                        $qq->where('qr_token', $token)
-                            ->orWhereRaw('BINARY `qr_token` = ?', [$token]);
-                    });
-                })
-                ->first();
-
-            // Fallback for old tokens
-            if (! $reg && $regId) {
-                $fallback = EventRegistration::find($regId);
-                if ($fallback && hash_equals($fallback->expectedFreePassToken(), $token)) {
-                    $reg = $fallback;
-                }
+            $reg = EventRegistration::where('event_id', $event->id)->find($regId);
+            $validToken = $reg && !empty($reg->qr_token) && hash_equals((string)$reg->qr_token, (string)$token);
+            if (!$validToken && $reg && method_exists($reg, 'expectedFreePassToken')) {
+                $validToken = hash_equals($reg->expectedFreePassToken(), (string)$token);
             }
-
-            if (! $reg) {
-                return response()->json(['ok' => false, 'reason' => 'Invalid pass token'], 422);
+            if (!$validToken) return response()->json(['ok' => false, 'reason' => 'Invalid pass token'], 422);
+            if (!($reg->status === 'free' || ($reg->status === null && (float)$reg->amount <= 0))) {
+                return response()->json(['ok' => false, 'reason' => 'Registration does not have an active free pass'], 422);
             }
 
             $already = (bool) $reg->checked_in_at;
@@ -408,7 +398,7 @@ class TicketController extends Controller
                 ])->save();
             }
 
-            $party = 1
+            $party = ($reg->items()->exists() ? max(1, (int)$reg->quantity) : 1)
                 + (int) ($reg->party_adults ?? 0)
                 + (int) ($reg->party_children ?? 0);
 
@@ -632,10 +622,7 @@ class TicketController extends Controller
 
         // For unpaid/cancelled/failed – never create; just show existing VALID ones.
         if (!in_array($status, $paidStates, true)) {
-            return $registration->tickets()
-                ->where('status', 'valid')
-                ->orderBy('index')
-                ->get();
+            return $registration->tickets()->whereRaw('1 = 0')->get();
         }
 
         // Items (category mode) and expected counts

@@ -32,7 +32,7 @@
                     </div>
 
                     @if($isFreeEvent)
-                        <div class="grid grid-cols-2 gap-4">
+                        <div x-data="{children: @js((int)old('party_children', $registration->party_children ?? 0)), childAges: @js(old('child_ages', $registration->child_ages ?? [])), init() { this.sync(); this.$watch('children', () => this.sync()); }, sync() { this.childAges = Array.from({length: Math.max(0, Math.min(20, Number(this.children) || 0))}, (_,i) => this.childAges[i] ?? ''); } }" class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Adults</label>
                                 <input type="number" name="party_adults" min="0" max="20"
@@ -41,10 +41,11 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700">Children</label>
-                                <input type="number" name="party_children" min="0" max="20"
+                                <input type="number" name="party_children" x-model.number="children" min="0" max="20"
                                        value="{{ old('party_children', (int)($registration->party_children ?? 0)) }}"
                                        class="mt-1 w-full rounded-lg border-gray-300" />
                             </div>
+<div class="col-span-2">@include('events.partials.child-ages')</div>
                         </div>
                         <p class="text-xs text-gray-500">Adding additional attendee applies only to free events.</p>
                     @else

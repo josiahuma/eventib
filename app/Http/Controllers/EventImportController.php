@@ -23,7 +23,7 @@ class EventImportController extends Controller
         ]);
 
         try {
-            $response = Http::timeout(20)->get($data['url']);
+            $response = app(\App\Services\PublicEventFetcher::class)->get($data['url']);
             $html     = $response->body();
         } catch (\Throwable $e) {
             return back()

@@ -1,9 +1,9 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between">
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div><h2 class="font-semibold text-xl text-gray-800 leading-tight">
                 Organiser Dashboard
-            </h2>
+            </h2><p class="ev-dashboard-subtitle">A clear view of your events, registrations and revenue.</p></div>
         </div>
     </x-slot>
 

@@ -34,7 +34,9 @@
         } else {
             $priceLabel = 'Free';
         }
-        $isFree = !$hasCats;
+        $isFree = $hasCats ? (float)$max <= 0 : (float)$event->ticket_cost <= 0;
+        if (!$hasCats && !$isFree) $priceLabel = $event->currency_symbol.number_format((float)$event->ticket_cost, 2);
+        if ($isFree) $priceLabel = 'Free';
 
         // Tags
         $tags = is_array($event->tags) ? $event->tags : (json_decode($event->tags ?? '[]', true) ?: []);
@@ -89,7 +91,8 @@
     @endsection
 
     {{-- Hero --}}
-    <div class="w-full bg-white border-b border-gray-100">
+    <nav class="ev-detail-breadcrumb" aria-label="Breadcrumb"><a href="{{ route('events.find') }}">Discover events</a><span aria-hidden="true">/</span><span>{{ $event->category ?: 'Your next plan' }}</span></nav>
+    <div class="ev-detail-banner w-full bg-white border-b border-gray-100">
         <div class="max-w-7xl mx-auto">
             <div class="relative rounded-b-2xl overflow-hidden">
                 @if ($image)
@@ -121,7 +124,8 @@
     </div>
 
     {{-- Content --}}
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="ev-detail-body max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        @include('events.partials.discovery-actions')
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {{-- Left --}}
             <div class="lg:col-span-2 space-y-6">
@@ -188,18 +192,19 @@
                 @if ($event->description)
                     <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
                         <h2 class="text-lg font-semibold text-gray-900">About this event</h2>
-                        @php
-                            function linkify($text) {
-                                $pattern = '/(https?:\/\/[^\s<]+)/i';
-                                return preg_replace($pattern, '<a href="$1" class="text-indigo-600 underline" target="_blank" rel="noopener">$1</a>', e($text));
-                            }
-                        @endphp
+
 
                         <div class="prose prose-indigo prose-a:text-indigo-600 hover:prose-a:text-orange-600 max-w-none">
-                            {!! $event->description !!}
+                            {!! app(\App\Services\SafeEventDescription::class)->clean($event->description ?? '') !!}
                         </div>
 
                     </div>
+                @endif
+
+                @if($event->faqs)
+                <section class="form-card"><h2 class="form-section-title">Good to know</h2>
+                    @foreach($event->faqs as $faq)<details class="border-b py-4"><summary class="cursor-pointer font-semibold">{{ $faq['question'] }}</summary><p class="text-gray-600 mt-3 whitespace-pre-line">{{ $faq['answer'] }}</p></details>@endforeach
+                </section>
                 @endif
 
                 {{-- Sessions (collapsible) --}}
@@ -258,7 +263,7 @@
                                         </div>
 
                                         {{-- Add to calendar action (styled as subtle button) --}}
-                                        <a href="#"
+                                        <a href="{{ route('events.calendar', ['event' => $event, 'session' => $s]) }}"
                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
                                                   rounded-full border border-indigo-100 bg-indigo-50 text-indigo-700
                                                   hover:bg-indigo-100 hover:border-indigo-200">
@@ -266,7 +271,7 @@
                                                 <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v3H3V6a2 2 0 0 1 2-2h1V3a1 1 0 0 1 1-1z"/>
                                                 <path d="M3 10h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8z"/>
                                             </svg>
-                                            <span>Add to calendar</span>
+                                            <span>Calendar (.ics)</span>
                                         </a>
                                     </li>
                                 @endforeach
@@ -295,13 +300,13 @@
 
             {{-- Right column (sticky floating ticket card) --}}
             <div class="lg:col-span-1 space-y-6">
-                <div class="lg:sticky lg:top-6 z-20 space-y-6">
+                <div class="ev-ticket-stack lg:sticky lg:top-6 z-20 space-y-6">
 
                 {{-- Ticket card --}}
-                <div class="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+                <div class="ev-ticket-card bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="text-sm text-gray-600">Ticket</div>
+                            <div class="ev-ticket-label text-sm text-gray-600">Your next plan starts here</div>
                             <div class="text-2xl font-bold text-gray-900">{{ $priceLabel }}</div>
                         </div>
                         @if ($image)
@@ -309,17 +314,7 @@
                         @endif
                     </div>
 
-                    {{-- Register button directly under price --}}
-                    @if ($hasUpcoming)
-                        <a href="{{ route('events.register', $event) }}"
-                        class="mt-5 inline-flex items-center justify-center w-full rounded-lg bg-indigo-600 text-white px-4 py-3 font-semibold text-lg hover:bg-indigo-700">
-                            {{ $isFree ? 'Attend' : 'Register' }}
-                        </a>
-                    @else
-                        <span class="mt-5 w-full inline-flex justify-center items-center px-4 py-3 rounded-xl bg-gray-100 text-gray-500 font-medium text-lg cursor-not-allowed">
-                            Registration closed
-                        </span>
-                    @endif
+                    @include('events.partials.booking-picker')
 
                     {{-- Date & Location --}}
                     <div class="mt-6 space-y-4">
@@ -408,6 +403,10 @@
             </div>
         </div>
     </div>
+
+    @if($relatedEvents->isNotEmpty())
+    <section class="max-w-7xl mx-auto px-4 pb-32"><div class="ev-intro"><p class="ev-kicker">KEEP EXPLORING</p><h2 class="text-3xl font-bold">More plans you might like.</h2><p>Upcoming events from this organiser or in the same category.</p></div><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">@foreach($relatedEvents as $relatedEvent) @include('events.partials._event_card', ['event' => $relatedEvent]) @endforeach</div></section>
+    @endif
 
     {{-- Alpine countdown helper --}}
     <script>

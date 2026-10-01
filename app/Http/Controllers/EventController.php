@@ -18,15 +18,13 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use App\Mail\EventCreatedMail;
-use App\Mail\OrganizerNewEventMail;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class EventController extends Controller
 {
     public function index()
     {
-        $events = Event::withCount('registrations')->latest()->paginate(10);
-        return view('events.index', compact('events'));
+        return redirect()->route('events.manage');
     }
 
     public function publicIndex(Request $request)
@@ -34,6 +32,18 @@ class EventController extends Controller
         $q   = trim($request->query('q', ''));
         $loc = trim($request->query('loc', ''));
         $now = Carbon::now();
+        $selection = $request->validate([
+            'category' => 'nullable|string|max:100',
+            'when' => 'nullable|in:today,weekend,week',
+            'price' => 'nullable|in:free,paid',
+        ]);
+        $homeCategory = $selection['category'] ?? '';
+        $homeWhen = $selection['when'] ?? '';
+        $homePrice = $selection['price'] ?? '';
+        $homeCategories = Event::query()->where('is_disabled', false)
+            ->whereHas('sessions', fn ($query) => $query->where('session_date', '>=', $now))
+            ->whereNotNull('category')->where('category', '!=', '')
+            ->selectRaw('category, COUNT(*) as event_count')->groupBy('category')->orderBy('category')->get();
 
         // ------- Base event query -------
         $base = Event::query()
@@ -42,7 +52,7 @@ class EventController extends Controller
                 'sessions'   => fn ($q) => $q->orderBy('session_date', 'asc'),
                 'categories' => fn ($q) => $q->where('is_active', true)->orderBy('sort')->orderBy('id'),
             ])
-            ->withMin('sessions', 'session_date')
+            ->withMin(['sessions' => fn ($query) => $query->where('session_date', '>=', $now)], 'session_date')
             ->withMax('sessions', 'session_date');
 
         if ($q !== '') {
@@ -58,6 +68,23 @@ class EventController extends Controller
 
         if ($loc !== '') {
             $base->where('location', 'like', '%' . $loc . '%');
+        }
+
+        if ($homeCategory !== '') $base->where('category', $homeCategory);
+        if ($homePrice === 'free') {
+            $base->whereDoesntHave('categories', fn ($query) => $query->where('is_active', true)->where('price', '>', 0))
+                ->where(fn ($query) => $query->whereNull('ticket_cost')->orWhere('ticket_cost', 0));
+        } elseif ($homePrice === 'paid') {
+            $base->where(fn ($query) => $query->whereHas('categories', fn ($cats) => $cats->where('is_active', true)->where('price', '>', 0))->orWhere('ticket_cost', '>', 0));
+        }
+        if ($homeWhen !== '') {
+            $start = $now->copy();
+            $end = $now->copy()->endOfDay();
+            if ($homeWhen === 'weekend') {
+                $start = $now->isSaturday() || $now->isSunday() ? $now->copy() : $now->copy()->next(Carbon::SATURDAY)->startOfDay();
+                $end = $start->copy()->isSunday() ? $start->copy()->endOfDay() : $start->copy()->addDay()->endOfDay();
+            } elseif ($homeWhen === 'week') $end = $now->copy()->addWeek();
+            $base->whereHas('sessions', fn ($query) => $query->whereBetween('session_date', [$start, $end]));
         }
 
         // ------- Featured / upcoming / past -------
@@ -102,6 +129,8 @@ class EventController extends Controller
             : null;
 
         return view('events.public-index', [
+            'homeCategories' => $homeCategories,
+            'homeCategory' => $homeCategory, 'homeWhen' => $homeWhen, 'homePrice' => $homePrice,
             'featured'       => $featured,
             'upcoming'       => $upcoming,
             'past'           => $past,
@@ -139,7 +168,7 @@ class EventController extends Controller
                                             ->orderBy('sort')->orderBy('id'),
                 'organizer',
             ])
-            ->withMin('sessions', 'session_date');
+            ->withMin(['sessions' => fn ($query) => $query->where('session_date', '>=', $now)], 'session_date');
 
         // Upcoming only
         $events->whereHas('sessions', fn ($q2) => $q2->where('session_date', '>=', $now));
@@ -190,7 +219,7 @@ class EventController extends Controller
         switch ($when) {
             case 'today':
                 $events->whereHas('sessions', fn ($q2) =>
-                    $q2->whereDate('session_date', $now->toDateString())
+                    $q2->whereDate('session_date', $now->toDateString())->where('session_date', '>=', $now)
                 );
                 break;
             case 'tomorrow':
@@ -201,8 +230,8 @@ class EventController extends Controller
                 break;
             case 'weekend':
                 // Next Sat–Sun window
-                $start = $now->copy()->next(Carbon::SATURDAY)->startOfDay();
-                $end   = $start->copy()->addDay()->endOfDay();
+                $start = $now->isSaturday() || $now->isSunday() ? $now->copy() : $now->copy()->next(Carbon::SATURDAY)->startOfDay();
+                $end = $start->isSunday() ? $start->copy()->endOfDay() : $start->copy()->addDay()->endOfDay();
                 $events->whereHas('sessions', fn ($q2) =>
                     $q2->whereBetween('session_date', [$start, $end])
                 );
@@ -584,6 +613,9 @@ class EventController extends Controller
             'tags.*'          => 'string|max:50',
             'location'        => 'nullable|string|max:255',
             'description'     => 'nullable|string',
+            'faqs' => 'nullable|array|max:6',
+            'faqs.*.question' => 'required|string|max:150',
+            'faqs.*.answer' => 'required|string|max:1000',
 
             // legacy fields retained (can be null for free)
             'ticket_cost'     => 'nullable|numeric|min:0|max:99999999.99',
@@ -591,7 +623,7 @@ class EventController extends Controller
 
             'avatar'          => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
 
-            'banner'          => 'nullable|image|mimes:jpg,jpeg,png|max:4096|required_without:external_banner_url',
+            'banner'          => 'nullable|image|mimes:jpg,jpeg,png|max:12288|required_without:external_banner_url',
             'external_banner_url' => 'nullable|url',
             'is_promoted'     => 'nullable|boolean',
             'is_recurring'   => 'nullable|boolean',
@@ -665,16 +697,15 @@ class EventController extends Controller
             $bannerUrl = $request->file('banner')->store('banners', 'public');
         } elseif ($request->filled('external_banner_url')) {
             try {
-                $response = Http::timeout(10)->get($request->input('external_banner_url'));
+                $response = app(\App\Services\PublicEventFetcher::class)->get($request->input('external_banner_url'));
 
                 if ($response->successful()) {
+                    $imageInfo = @getimagesizefromstring($response->body());
+                    if (!$imageInfo || !in_array($imageInfo[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG, IMAGETYPE_WEBP], true)) {
+                        throw new \InvalidArgumentException('Imported banner must be a JPG, PNG or WebP image.');
+                    }
                     // crude content-type → extension mapping
-                    $contentType = $response->header('Content-Type', 'image/jpeg');
-                    $ext = match (true) {
-                        str_contains($contentType, 'png')  => 'png',
-                        str_contains($contentType, 'webp') => 'webp',
-                        default                            => 'jpg',
-                    };
+                    $ext = match ($imageInfo[2]) { IMAGETYPE_PNG => 'png', IMAGETYPE_WEBP => 'webp', default => 'jpg' };
 
                     $filename = 'banners/' . Str::uuid() . '.' . $ext;
                     Storage::disk('public')->put($filename, $response->body());
@@ -692,53 +723,52 @@ class EventController extends Controller
 
         $tagsArray = is_array($validated['tags'] ?? null) ? $validated['tags'] : [];
 
-        $event = Event::create([
-            'user_id'          => Auth::id(),
-            'name'             => $validated['name'],
-            'organizer_id' => $validated['organizer_id'],
-            'category'         => $validated['category'] ?? null,
-            'tags'             => json_encode($tagsArray),
-            'location'         => $validated['location'] ?? null,
-            'description'      => $validated['description'] ?? null,
-            'ticket_cost'      => $hasCats ? 0 : ($validated['ticket_cost'] ?? 0), // ignore legacy cost when using categories
-            'ticket_currency'  => $currency,
-            'payout_method_id' => $isPaid ? ($request->input('payout_method_id') ?? null) : null,
-            'avatar_url'       => $avatarUrl,
-            'banner_url'       => $bannerUrl,
-            'is_promoted'      => (bool)($validated['is_promoted'] ?? false),
-            'fee_mode'         => $feeMode,
-            'fee_bps'          => $feeBps,
-            'is_recurring'       => $request->boolean('is_recurring'),
-            'recurrence_summary' => $request->input('recurrence_summary') ?: null,
-            'capacity'         => $validated['capacity'] ?? null,
-            'digital_pass_mode'    => $validated['digital_pass_mode'],
-            'digital_pass_methods' => $validated['digital_pass_methods'],
-        ]);
+        $event = DB::transaction(function () use ($validated, $hasCats, $currency, $isPaid, $request, $avatarUrl, $bannerUrl, $feeMode, $feeBps, $rows, $tagsArray) {
+            $event = Event::create([
+                'user_id'          => Auth::id(),
+                'name'             => $validated['name'],
+                'organizer_id' => $validated['organizer_id'],
+                'category'         => $validated['category'] ?? null,
+                'tags'             => $tagsArray,
+                'location'         => $validated['location'] ?? null,
+                'description'      => $validated['description'] ?? null,
+                'faqs' => array_values($validated['faqs'] ?? []),
+                'ticket_cost'      => $hasCats ? 0 : ($validated['ticket_cost'] ?? 0), // ignore legacy cost when using categories
+                'ticket_currency'  => $currency,
+                'payout_method_id' => $isPaid ? ($request->input('payout_method_id') ?? null) : null,
+                'avatar_url'       => $avatarUrl,
+                'banner_url'       => $bannerUrl,
+                'is_promoted'      => (bool)($validated['is_promoted'] ?? false),
+                'fee_mode'         => $feeMode,
+                'fee_bps'          => $feeBps,
+                'is_recurring'       => $request->boolean('is_recurring'),
+                'recurrence_summary' => $request->input('recurrence_summary') ?: null,
+                'capacity'         => $validated['capacity'] ?? null,
+                'digital_pass_mode'    => $validated['digital_pass_mode'],
+                'digital_pass_methods' => $validated['digital_pass_methods'],
+            ]);
 
-        if ($request->has('sessions')) {
-            foreach ($request->sessions as $session) {
-                $event->sessions()->create([
-                    'session_name' => $session['name'],
-                    'session_date' => $session['date'] . ' ' . $session['time'],
-                ]);
-            }
-        }
-
-        foreach ($rows as $r) {
-            $event->categories()->create($r);
-        }
-
-        Mail::to(auth()->user()->email)->send(new EventCreatedMail($event));
-
-        // notify followers
-        $organizer = $event->organizer; // relation
-        if ($organizer) {
-            $followers = $organizer->followers; // assuming you have many-to-many
-            foreach ($followers as $follower) {
-                if ($follower->email) {
-                    Mail::to($follower->email)->queue(new OrganizerNewEventMail($organizer, $event));
+            if ($request->has('sessions')) {
+                foreach ($request->sessions as $session) {
+                    $event->sessions()->create([
+                        'session_name' => $session['name'],
+                        'session_date' => $session['date'] . ' ' . $session['time'],
+                    ]);
                 }
             }
+
+            foreach ($rows as $r) {
+                $event->categories()->create($r);
+            }
+
+            app(\App\Services\OrganizerEventAlerts::class)->record($event);
+            return $event;
+        });
+
+        try {
+            Mail::to(auth()->user()->email)->send(new EventCreatedMail($event));
+        } catch (\Throwable $e) {
+            report($e); // Event is already saved; do not invite a duplicate form submission.
         }
 
         return redirect()->route('events.manage')->with('success', 'Event created successfully!');
@@ -765,6 +795,9 @@ class EventController extends Controller
 
             'location'      => 'nullable|string|max:255',
             'description'   => 'nullable|string',
+            'faqs' => 'nullable|array|max:6',
+            'faqs.*.question' => 'required|string|max:150',
+            'faqs.*.answer' => 'required|string|max:1000',
             'is_recurring'   => 'nullable|boolean',
             'recurrence_summary' => 'nullable|string|max:255',
             'capacity'      => 'nullable|integer|min:0',
@@ -773,7 +806,7 @@ class EventController extends Controller
 
             // media
             'avatar'        => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-            'banner'        => 'nullable|image|mimes:jpg,jpeg,png|max:4096',
+            'banner'        => 'nullable|image|mimes:jpg,jpeg,png|max:12288',
         ]);
 
         // ✅ 2. Handle media uploads (avatar & banner)
@@ -800,9 +833,10 @@ class EventController extends Controller
         $event->name             = $validated['name'];
         $event->organizer_id     = $validated['organizer_id'];
         $event->category         = $validated['category'] ?? null;
-        $event->tags             = json_encode($tagsArray);
+        $event->tags             = $tagsArray;
         $event->location         = $validated['location'] ?? null;
         $event->description      = $validated['description'] ?? null;
+        $event->faqs = array_values($validated['faqs'] ?? []);
         $event->capacity         = $validated['capacity'] ?? null;
         $event->digital_pass_mode    = $validated['digital_pass_mode'];
         $event->digital_pass_methods = $validated['digital_pass_methods'];
@@ -882,7 +916,8 @@ class EventController extends Controller
 
     public function show(Event $event)
     {
-        $event->load('organizer'); // Add this line
+        abort_if($event->is_disabled, 404);
+        $event->load(['organizer', 'sessions']);
         $activeCats = $event->categories()->where('is_active', true)->orderBy('sort')->orderBy('id')->get();
         $min = $activeCats->min('price');
         $max = $activeCats->max('price');
@@ -890,8 +925,23 @@ class EventController extends Controller
         $upcomingSessions = $event->upcomingSessions()->get();
         $nextSession = $upcomingSessions->first();
 
+        $booking = app(\App\Services\EventBookingData::class)->forEvent($event);
+        $relatedEvents = Event::query()->where('is_disabled', false)->where('id', '!=', $event->id)
+            ->whereHas('sessions', fn ($q) => $q->where('session_date', '>', now()))
+            ->where(function ($q) use ($event) {
+                $q->whereRaw('1 = 0');
+                if ($event->organizer_id) $q->orWhere('organizer_id', $event->organizer_id);
+                if ($event->category) $q->orWhere('category', $event->category);
+            })
+            ->with(['sessions', 'categories' => fn ($q) => $q->where('is_active', true)])
+            ->withMin(['sessions' => fn ($q) => $q->where('session_date', '>', now())], 'session_date')
+            ->orderByRaw('CASE WHEN organizer_id = ? THEN 0 ELSE 1 END', [$event->organizer_id ?? 0])
+            ->orderBy('sessions_min_session_date')->limit(3)->get();
+
         return view('events.show', [
             'event'      => $event,
+            'booking' => $booking,
+            'relatedEvents' => $relatedEvents,
             'activeCats' => $activeCats,
             'minPrice'   => $min,
             'maxPrice'   => $max,
@@ -903,9 +953,9 @@ class EventController extends Controller
     public function past()
     {
         // Get events whose latest session date is in the past
-        $past = \App\Models\Event::whereHas('sessions', function ($query) {
-                $query->where('session_date', '<', now());
-            })
+        $past = \App\Models\Event::where('is_disabled', false)
+            ->whereHas('sessions', fn ($query) => $query->where('session_date', '<', now()))
+            ->whereDoesntHave('sessions', fn ($query) => $query->where('session_date', '>=', now()))
             ->with(['sessions' => function ($query) {
                 $query->orderBy('session_date', 'desc');
             }])

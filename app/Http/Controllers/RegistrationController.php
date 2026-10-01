@@ -11,12 +11,14 @@ use App\Models\UserDigitalPass;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\Rule;
 use Stripe\StripeClient;
 
 class RegistrationController extends Controller
 {
-    public function create(Event $event)
+    public function create(Request $request, Event $event)
     {
+        abort_if($event->is_disabled, 404);
         // Load relations used by the form
         $event->load([
             'sessions',
@@ -24,7 +26,7 @@ class RegistrationController extends Controller
         ]);
 
         // Determine pricing type from active categories
-        $isPaidEvent = $event->categories()->exists();
+        $isPaidEvent = $event->categories->contains(fn ($category) => (float)$category->price > 0) || ($event->categories->isEmpty() && (float)($event->ticket_cost ?? 0) > 0);
 
         // Only flag duplicates for FREE events (not paid categories)
         $alreadyRegistered = false;
@@ -42,8 +44,22 @@ class RegistrationController extends Controller
                 ->exists();
         }
 
+        $bookingSelection = $request->validate([
+            'session_ids' => 'nullable|array|max:100',
+            'session_ids.*' => ['integer', 'distinct', Rule::exists('event_sessions', 'id')->where(fn ($q) => $q->where('event_id', $event->id)->where('session_date', '>', now()))],
+            'categories' => 'nullable|array|max:50', 'categories.*' => 'integer|min:0|max:100',
+            'quantity' => 'nullable|integer|min:1|max:10',
+            'party_adults' => 'nullable|integer|min:0|max:20', 'party_children' => 'nullable|integer|min:0|max:20',
+            'child_ages' => 'nullable|array|max:20', 'child_ages.*' => 'required|integer|min:0|max:17',
+        ]);
+        $allowedCategoryIds = $event->categories->pluck('id')->map(fn ($id) => (string)$id)->all();
+        foreach (array_keys($bookingSelection['categories'] ?? []) as $id) {
+            abort_unless(in_array((string)$id, $allowedCategoryIds, true), 422, 'Invalid ticket category.');
+        }
+
         return view('events.register', [
             'event'             => $event,
+            'bookingSelection' => $bookingSelection,
             'isPaidEvent'       => $isPaidEvent,
             'alreadyRegistered' => $alreadyRegistered,
         ]);
@@ -51,6 +67,7 @@ class RegistrationController extends Controller
 
     public function store(Request $request, Event $event)
     {
+        abort_if($event->is_disabled, 404);
         $event->load([
             'sessions',
             'categories' => fn ($q) => $q->where('is_active', true)->orderBy('sort')->orderBy('id'),
@@ -60,8 +77,8 @@ class RegistrationController extends Controller
             'name'          => 'required|string|max:255',
             'email'         => 'required|email',
             'mobile'        => 'nullable|string|max:30',
-            'session_ids'   => 'required|array|min:1',
-            'session_ids.*' => 'integer|exists:event_sessions,id',
+            'session_ids'   => 'required|array|min:1|max:100',
+            'session_ids.*' => ['integer', 'distinct', Rule::exists('event_sessions', 'id')->where(fn ($q) => $q->where('event_id', $event->id)->where('session_date', '>', now()))],
 
             // digital-pass fields from the form (optional)
             'digital_pass_method' => 'nullable|string|in:voice,face,any',
@@ -71,15 +88,27 @@ class RegistrationController extends Controller
         $isSinglePaid  = ! $hasCategories && (($event->ticket_cost ?? 0) > 0);
 
         $extraRules = $hasCategories
-            ? ['categories' => 'required|array'] // categories[catId] => qty
+            ? ['categories' => 'required|array|max:50', 'categories.*' => 'integer|min:0|max:100'] // categories[catId] => qty
             : ($isSinglePaid
                 ? ['quantity' => 'required|integer|min:1|max:10']
                 : [
                     'party_adults'   => 'nullable|integer|min:0|max:20',
                     'party_children' => 'nullable|integer|min:0|max:20',
+                    'child_ages' => 'nullable|array|max:20',
+                    'child_ages.*' => 'required|integer|min:0|max:17',
                 ]);
 
         $validated = $request->validate($baseRules + $extraRules);
+        if (!$hasCategories && !$isSinglePaid && count($validated['child_ages'] ?? []) !== (int)($validated['party_children'] ?? 0)) {
+            return back()->withErrors(['child_ages' => 'Please select an age for each child.'])->withInput();
+        }
+        if ($hasCategories) {
+            $allowed = $event->categories->pluck('id')->map(fn ($id) => (string)$id)->all();
+            foreach (array_keys($validated['categories']) as $id) {
+                if (!in_array((string)$id, $allowed, true)) return back()->withErrors(['categories' => 'Please choose an active ticket type for this event.'])->withInput();
+            }
+        }
+
 
         // ============================
         //  DIGITAL PASS EVENT POLICY
@@ -254,13 +283,7 @@ class RegistrationController extends Controller
             }
 
             // Reuse pending draft if any; otherwise create a new one
-            $registration = EventRegistration::where('event_id', $event->id)
-                ->where('status', 'pending')
-                ->where(function ($q) use ($validated) {
-                    if (Auth::check()) $q->orWhere('user_id', Auth::id());
-                    $q->orWhere('email', $validated['email']);
-                })
-                ->latest('id')->first();
+            $registration = null; // Each Checkout owns a separate draft; earlier sessions cannot pay for edited items.
 
             if ($registration) {
                 $registration->fill([
@@ -315,7 +338,7 @@ class RegistrationController extends Controller
             // FREE categories selection -> confirm immediately
             if ($totalMajor <= 0) {
                 if ($event->user?->email) {
-                    Mail::to($event->user->email)->send(new NewRegistrationNotificationMail($event, $registration));
+                    try { Mail::to($event->user->email)->send(new NewRegistrationNotificationMail($event, $registration)); } catch (\Throwable $error) { report($error); }
                 }
 
                 if ($registration->status === 'free' && empty($registration->qr_token)) {
@@ -323,7 +346,7 @@ class RegistrationController extends Controller
                     $registration->save();
                 }
 
-                Mail::to($registration->email)->send(new RegistrationConfirmedMail($event, $registration));
+                try { Mail::to($registration->email)->send(new RegistrationConfirmedMail($event, $registration)); } catch (\Throwable $error) { report($error); }
 
                 return redirect()->to(
                     route('events.register.result', ['event' => $event, 'registered' => 1])
@@ -428,13 +451,7 @@ class RegistrationController extends Controller
             $feeMajor = round($subtotalMajor * $event->feeRate(), 2); // per transaction fee
         }
 
-        $registration = EventRegistration::where('event_id', $event->id)
-            ->where('status', 'pending')
-            ->where(function ($q) use ($request) {
-                if (Auth::check()) $q->orWhere('user_id', Auth::id());
-                $q->orWhere('email', $request->input('email'));
-            })
-            ->latest('id')->first();
+        $registration = null; // Each Checkout owns a separate draft; earlier sessions cannot pay for edited items.
 
         if ($registration) {
             $registration->fill([
@@ -444,6 +461,7 @@ class RegistrationController extends Controller
                 'quantity'       => $quantity,
                 'party_adults'   => $partyAdults,
                 'party_children' => $partyChildren,
+                'child_ages' => $isPaid ? [] : array_values($validated['child_ages'] ?? []),
                 'currency'       => $currency,
                 'amount'         => $subtotalMajor,
                 'platform_fee'   => $feeMajor,
@@ -466,6 +484,7 @@ class RegistrationController extends Controller
                 'quantity'       => $quantity,
                 'party_adults'   => $partyAdults,
                 'party_children' => $partyChildren,
+                'child_ages' => $isPaid ? [] : array_values($validated['child_ages'] ?? []),
                 // 🔐 Digital pass flags
                 'uses_digital_pass'   => $useDigitalPass,
                 'digital_pass_method' => $digitalMethod,
@@ -479,7 +498,7 @@ class RegistrationController extends Controller
 
         if (! $isPaid) {
             if ($event->user?->email) {
-                Mail::to($event->user->email)->send(new NewRegistrationNotificationMail($event, $registration));
+                try { Mail::to($event->user->email)->send(new NewRegistrationNotificationMail($event, $registration)); } catch (\Throwable $error) { report($error); }
             }
 
             if ($registration->status === 'free' && empty($registration->qr_token)) {
@@ -487,7 +506,7 @@ class RegistrationController extends Controller
                 $registration->save();
             }
 
-            Mail::to($registration->email)->send(new RegistrationConfirmedMail($event, $registration));
+            try { Mail::to($registration->email)->send(new RegistrationConfirmedMail($event, $registration)); } catch (\Throwable $error) { report($error); }
 
             return redirect()->to(
                 route('events.register.result', ['event' => $event, 'registered' => 1])
@@ -559,7 +578,7 @@ class RegistrationController extends Controller
             if ($request->filled('session_id')) {
                 EventRegistration::where('stripe_session_id', $request->query('session_id'))
                     ->where('event_id', $event->id)
-                    ->update(['status' => 'canceled']);
+                    ->where('status', 'pending')->update(['status' => 'canceled']);
             }
 
             return redirect()
@@ -599,23 +618,13 @@ class RegistrationController extends Controller
                         ->where('event_id', $event->id)
                         ->first();
 
-                    // Keep track so we don't email twice on refresh
-                    $alreadyPaid = $reg && $reg->status === 'paid';
-
-                    // Persist status/amount/currency
-                    EventRegistration::where('stripe_session_id', $session->id)
-                        ->where('event_id', $event->id)
-                        ->update([
-                            'status'   => 'paid',
-                            'currency' => $sessionCurrency,
-                        ]);
-
-                    // Re-load if we didn't have it
-                    if (! $reg) {
-                        $reg = EventRegistration::where('stripe_session_id', $session->id)
-                            ->where('event_id', $event->id)
-                            ->first();
-                    }
+                    if (!$reg) throw new \RuntimeException('Checkout does not belong to this event registration.');
+                    // Compare-and-set shares the same claim with the webhook: only one path notifies.
+                    $claimed = EventRegistration::whereKey($reg->id)->whereIn('status', ['pending', 'canceled', 'cancelled'])
+                        ->update(['status' => 'paid', 'currency' => $sessionCurrency]);
+                    $alreadyPaid = !$claimed;
+                    $reg->refresh();
+                    if ($reg->status !== 'paid') throw new \RuntimeException('Registration cannot be confirmed.');
 
                     // 🔔 Send emails ONCE (organizer + attendee)
                     if ($reg && ! $alreadyPaid) {

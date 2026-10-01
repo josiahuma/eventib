@@ -275,6 +275,12 @@ class RegistrantsController extends Controller
             return redirect()->route('events.registrants.unlock', $event)->with('error', 'Payment not completed.');
         }
 
+        if (($session->metadata->purpose ?? null) !== 'registrants_unlock'
+            || (int)($session->metadata->event_id ?? 0) !== $event->id
+            || (int)($session->metadata->user_id ?? 0) !== $user->id) {
+            return redirect()->route('events.registrants.unlock', $event)->with('error', 'This payment does not belong to this event unlock.');
+        }
+
         // Persist the actual paid amount/currency from Stripe (minor units)
         $paidMinor = (int) ($session->amount_total ?? $this->unlockAmount);
         $paidCurr  = strtolower((string) ($session->currency ?? $this->currency));

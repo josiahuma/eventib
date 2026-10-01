@@ -1,7 +1,7 @@
 {{-- resources/views/my-tickets/index.blade.php --}}
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">My tickets</h2>
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">My tickets</h2><p class="ev-dashboard-subtitle">Your upcoming experiences and the tickets that get you there.</p>
     </x-slot>
 
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

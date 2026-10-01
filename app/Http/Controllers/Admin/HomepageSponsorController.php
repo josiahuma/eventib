@@ -9,8 +9,14 @@ use Illuminate\Support\Facades\Storage;
 
 class HomepageSponsorController extends Controller
 {
+    private function ensureAdmin(): void
+    {
+        abort_unless(auth()->user() && (bool) auth()->user()->is_admin, 403);
+    }
+
     public function index()
     {
+        $this->ensureAdmin();
         $sponsors = HomepageSponsor::orderBy('priority')->orderByDesc('id')->paginate(20);
 
         return view('admin.homepage_sponsors.index', compact('sponsors'));
@@ -18,6 +24,7 @@ class HomepageSponsorController extends Controller
 
     public function create()
     {
+        $this->ensureAdmin();
         $sponsor = new HomepageSponsor();
 
         return view('admin.homepage_sponsors.form', [
@@ -28,6 +35,7 @@ class HomepageSponsorController extends Controller
 
     public function store(Request $request)
     {
+        $this->ensureAdmin();
         $data = $this->validateData($request);
 
         if ($request->hasFile('logo')) {
@@ -47,6 +55,7 @@ class HomepageSponsorController extends Controller
 
     public function edit(HomepageSponsor $homepageSponsor)
     {
+        $this->ensureAdmin();
         return view('admin.homepage_sponsors.form', [
             'sponsor' => $homepageSponsor,
             'mode'    => 'edit',
@@ -55,6 +64,7 @@ class HomepageSponsorController extends Controller
 
     public function update(Request $request, HomepageSponsor $homepageSponsor)
     {
+        $this->ensureAdmin();
         $data = $this->validateData($request);
 
         if ($request->hasFile('logo')) {
@@ -80,6 +90,7 @@ class HomepageSponsorController extends Controller
 
     public function destroy(HomepageSponsor $homepageSponsor)
     {
+        $this->ensureAdmin();
         if ($homepageSponsor->logo_path) {
             Storage::disk('public')->delete($homepageSponsor->logo_path);
         }

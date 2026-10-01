@@ -108,7 +108,8 @@ class PayoutController extends Controller
         ]);
 
         return DB::transaction(function () use ($event, $validated, $currency) {
-            // Recompute inside the transaction to avoid race conditions
+            Event::whereKey($event->id)->lockForUpdate()->firstOrFail();
+            // Serialize requests for the same event before recomputing availability.
             [$availableMinor, $curr] = $this->availableForEvent($event);
             if ($availableMinor <= 0 || $validated['amount'] > $availableMinor) {
                 return redirect()
@@ -157,8 +158,8 @@ class PayoutController extends Controller
                 return (int) round(((float) ($r->amount ?? 0)) * 100);
             });
 
-        // 9.99% commission
-        $commissionMinor = intdiv($sumMinor * 590, 10000);
+        // Passed booking fees were charged separately; do not deduct them again from ticket revenue.
+        $commissionMinor = $event->feeMode() === 'pass' ? 0 : intdiv($sumMinor * 590, 10000);
         $netMinor        = max(0, $sumMinor - $commissionMinor);
 
         // Subtract payouts not failed/cancelled

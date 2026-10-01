@@ -14,6 +14,7 @@ class Event extends Model
     protected $fillable = [
         'user_id',
         'name',
+        'faqs',
         'organizer_id',
         'category',
         'tags',
@@ -40,6 +41,7 @@ class Event extends Model
 
     protected $casts = [
         'tags'        => 'array',
+        'faqs'        => 'array',
         'is_promoted' => 'boolean',
         'ticket_cost' => 'decimal:2',
         'is_disabled' => 'boolean',

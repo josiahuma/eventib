@@ -99,7 +99,7 @@
                     </div>
 
                     {{-- Party size --}}
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div x-data="{children: @js((int)old('party_children', $registration->party_children ?? 0)), childAges: @js(old('child_ages', $registration->child_ages ?? [])), init() { this.sync(); this.$watch('children', () => this.sync()); }, sync() { this.childAges = Array.from({length: Math.max(0, Math.min(20, Number(this.children) || 0))}, (_,i) => this.childAges[i] ?? ''); } }" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="form-label">Adults</label>
                             <input
@@ -115,13 +115,14 @@
                             <label class="form-label">Children</label>
                             <input
                                 type="number"
-                                name="party_children"
+                                name="party_children" x-model.number="children"
                                 min="0"
                                 max="20"
                                 value="{{ old('party_children', $ch) }}"
                                 class="form-input"
                             />
                         </div>
+<div class="col-span-2">@include('events.partials.child-ages')</div>
                     </div>
                 @else
                     {{-- Paid event info --}}

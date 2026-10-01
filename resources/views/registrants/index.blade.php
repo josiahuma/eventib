@@ -152,6 +152,7 @@
                         <div>
                             <div class="font-medium text-gray-900">
                                 {{ $reg->name ?? 'Unnamed' }}
+                                @if($reg->child_ages)<div class="text-sm font-normal text-gray-600">Children’s ages: {{ collect($reg->child_ages)->map(fn ($age) => (int)$age === 0 ? 'Under 1' : $age . ' years')->join(', ') }}</div>@endif
                                 <span class="text-gray-500 font-normal">· {{ $reg->email ?? 'no email' }}</span>
                             </div>
 

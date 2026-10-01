@@ -37,7 +37,6 @@
                         </button>
                         <button type="button" id="btnShare" class="avatar-secondary" disabled>Save / share image</button>
                         <button type="button" id="btnEdit" class="avatar-secondary" disabled>Adjust photo crop</button>
-                        <button type="button" id="btnReset" class="avatar-secondary" disabled>Centre photo on flyer</button>
                         <div id="exportPreview" hidden><img id="exportImage" alt="Your finished event avatar"><a id="openImage" target="_blank" rel="noopener">Open full image</a><p>On iPhone, use Save / share image. You can also touch and hold the finished image to see saving options.</p></div>
                         <p id="avatarStatus" role="status" aria-live="polite" class="text-sm text-gray-600 mt-3">Choose a photo to get started. Your photo stays in your browser.</p>
                     </div>
@@ -48,7 +47,7 @@
             <div class="lg:col-span-2">
                 <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
                     <div class="mb-3 text-sm text-gray-600">
-                        2. Make it yours — drag your photo into the frame and resize using the corners. Then download or share your finished avatar.
+                        2. Your photo fits automatically. To change your framing, tap “Adjust photo crop”. Then download or share your finished avatar.
                     </div>
                     <div id="canvas-wrap" class="w-full overflow-hidden rounded-xl border border-dashed border-gray-300 bg-gray-50 p-3">
                         <canvas id="avatar-canvas"></canvas>
@@ -122,10 +121,63 @@
         const canvas = new fabric.Canvas('avatar-canvas', {
             selection: false,
             preserveObjectStacking: true,
-            enableRetinaScaling: true
+            enableRetinaScaling: true,
+            allowTouchScrolling: true
         });
         let bgImg = null;
         let userImgObj = null;
+        let photoFrame = null;
+
+        // Largest enclosed transparent region, measured once per template.
+        // Normalised coordinates keep the same fit on every screen and export size.
+        function findPhotoFrame(data, width, height) {
+            const count = width * height;
+            const visited = new Uint8Array(count);
+            const queue = new Int32Array(count);
+            let best = null;
+            for (let start = 0; start < count; start++) {
+                if (visited[start] || data[start * 4 + 3] >= 128) continue;
+                let head = 0, tail = 1, area = 0;
+                queue[0] = start; visited[start] = 1;
+                let minX = width, minY = height, maxX = 0, maxY = 0, touchesEdge = false;
+                while (head < tail) {
+                    const p = queue[head++], x = p % width, y = Math.floor(p / width);
+                    area++;
+                    minX = Math.min(minX,x); maxX = Math.max(maxX,x);
+                    minY = Math.min(minY,y); maxY = Math.max(maxY,y);
+                    if (x === 0 || y === 0 || x === width-1 || y === height-1) touchesEdge = true;
+                    const visit = n => {
+                        if (!visited[n] && data[n*4+3] < 128) { visited[n] = 1; queue[tail++] = n; }
+                    };
+                    if (x > 0) visit(p-1);
+                    if (x < width-1) visit(p+1);
+                    if (y > 0) visit(p-width);
+                    if (y < height-1) visit(p+width);
+                }
+                if (!touchesEdge && area > count*.01 && (!best || area > best.area)) best = {area,minX,minY,maxX,maxY};
+            }
+            if (!best) return null;
+            // Extend the backing photo slightly beneath the rim to cover antialiased edges.
+            const left = Math.max(0,best.minX-4), top = Math.max(0,best.minY-4);
+            const right = Math.min(width,best.maxX+5), bottom = Math.min(height,best.maxY+5);
+            return {x:(left+right)/2/width, y:(top+bottom)/2/height, width:(right-left)/width, height:(bottom-top)/height};
+        }
+        function measureFrame(image) {
+            const probe = document.createElement('canvas');
+            const factor = Math.min(1,512 / Math.max(image.naturalWidth,image.naturalHeight));
+            probe.width = Math.max(1,Math.round(image.naturalWidth*factor));
+            probe.height = Math.max(1,Math.round(image.naturalHeight*factor));
+            const context = probe.getContext('2d', {willReadFrequently:true});
+            context.drawImage(image,0,0,probe.width,probe.height);
+            return findPhotoFrame(context.getImageData(0,0,probe.width,probe.height).data,probe.width,probe.height);
+        }
+        function fitPhotoToFrame() {
+            if (!userImgObj || !photoFrame) return;
+            const width = canvas.getWidth(), height = canvas.getHeight();
+            const scale = Math.max(photoFrame.width*width/userImgObj.width,photoFrame.height*height/userImgObj.height);
+            userImgObj.set({left:photoFrame.x*width, top:photoFrame.y*height, scaleX:scale, scaleY:scale});
+            userImgObj.setCoords();
+        }
 
         function resizeCanvas() {
             if (!bgImg) return;
@@ -139,7 +191,7 @@
             const padY = parseFloat(cs.paddingTop)  + parseFloat(cs.paddingBottom);
 
             const innerW = Math.max(1, Math.floor(rect.width - padX - 2));
-            const previousW = canvas.getWidth();
+
 
             // keep original image aspect
             const ratio = bgImg.height / bgImg.width;
@@ -154,18 +206,13 @@
 
             // Scale bg image to fill canvas exactly
             const scale = cw / bgImg.width;
-            canvas.setBackgroundImage(
+            canvas.setOverlayImage(
                 bgImg,
                 canvas.renderAll.bind(canvas),
-                { originX: 'left', originY: 'top', scaleX: scale, scaleY: scale }
+                { originX: 'left', originY: 'top', scaleX: scale, scaleY: scale, objectCaching: false }
             );
 
-            // Preserve photo placement and size across viewport changes
-            if (userImgObj) {
-                const factor = cw / previousW;
-                userImgObj.set({ left: userImgObj.left * factor, top: userImgObj.top * factor, scaleX: userImgObj.scaleX * factor, scaleY: userImgObj.scaleY * factor });
-                userImgObj.setCoords();
-            }
+            fitPhotoToFrame();
             canvas.requestRenderAll();
             if (userImgObj) queueExport();
         }
@@ -187,15 +234,21 @@
         const status = document.getElementById('avatarStatus');
         const btnShare = document.getElementById('btnShare');
         const btnEdit = document.getElementById('btnEdit');
-        const btnReset = document.getElementById('btnReset');
         const preview = document.getElementById('exportPreview');
         let cropper = null, photoUrl = null, previousFocus = null, oldOverflow = '', exportUrl = null, exportFile = null, exportRevision = 0, exportTimer;
         const fileName = @json((\Illuminate\Support\Str::slug($event->name) ?: 'event') . '_display_picture.png');
 
         fabric.Image.fromURL(bgUrl, (img) => {
             if (!img || !img.width) { status.textContent = "The event artwork could not load. Please reload the page."; return; }
-            input.disabled = false;
             bgImg = img;
+            try { photoFrame = measureFrame(img.getElement()); }
+            catch (error) { console.error(error); }
+            if (!photoFrame) {
+                status.textContent = 'This avatar template needs one transparent photo opening. Ask the organiser to upload a PNG template with a transparent frame.';
+                resizeCanvas();
+                return;
+            }
+            input.disabled = false;
             resizeCanvas();
         }, { crossOrigin: 'anonymous' });
 
@@ -317,46 +370,20 @@
                 imageSmoothingEnabled: true, imageSmoothingQuality: 'high'
             });
 
-            const circleCanvas = document.createElement('canvas');
-            circleCanvas.width = SIZE; circleCanvas.height = SIZE;
-            const ctx = circleCanvas.getContext('2d');
-            ctx.clearRect(0, 0, SIZE, SIZE);
-            ctx.beginPath(); ctx.arc(SIZE/2, SIZE/2, SIZE/2, 0, Math.PI*2); ctx.closePath();
-            ctx.clip();
-            ctx.drawImage(square, 0, 0, SIZE, SIZE);
-
-            const dataUrl = circleCanvas.toDataURL('image/png');
-
-            const targetDiameterRatio = 0.36;
-            const targetDiameter = Math.min(canvas.getWidth(), canvas.getHeight()) * targetDiameterRatio;
-
-            fabric.Image.fromURL(dataUrl, (img) => {
-                const scale = targetDiameter / img.width;
-                img.scale(scale);
-                img.set({
-                    left: canvas.getWidth() / 2,
-                    top: canvas.getHeight() / 2,
-                    originX: 'center',
-                    originY: 'center',
-                    selectable: true,
-                    hasControls: true,
-                    hasBorders: true,
-                    cornerStyle: 'circle',
-                    borderColor: '#6366f1',
-                    cornerColor: '#6366f1',
-                    cornerSize: 10,
-                    lockUniScaling: true,
-                });
-
-                if (userImgObj) canvas.remove(userImgObj);
-                userImgObj = img;
-                canvas.add(userImgObj).setActiveObject(userImgObj);
-                userImgObj.bringToFront();
-                canvas.renderAll();
-
-                btnEdit.disabled = false; btnReset.disabled = false;
-                queueExport();
+            if (!square) throw new Error('Photo crop unavailable');
+            const img = new fabric.Image(square, {
+                originX: 'center', originY: 'center',
+                selectable: false, evented: false,
+                hasControls: false, hasBorders: false,
+                objectCaching: false
             });
+            if (userImgObj) canvas.remove(userImgObj);
+            userImgObj = img;
+            fitPhotoToFrame();
+            canvas.add(userImgObj);
+            canvas.renderAll();
+            btnEdit.disabled = false;
+            queueExport();
 
             try { cropper.destroy(); } catch {}
             cropper = null;
@@ -391,12 +418,6 @@
                 } catch (error) { status.textContent = 'Could not export the image. Reload the page and try again.'; console.error(error); }
             }, 180);
         }
-        canvas.on('object:modified', queueExport);
-        btnReset.addEventListener('click', () => {
-            if (!userImgObj) return;
-            userImgObj.set({left:canvas.getWidth()/2,top:canvas.getHeight()/2});
-            userImgObj.setCoords(); canvas.requestRenderAll(); queueExport();
-        });
         btnDownload.addEventListener('click', () => {
             if (!exportUrl || !exportFile) return;
             preview.hidden = false;

@@ -5,7 +5,7 @@
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                Create Display Picture — {{ $event->name }}
+                Your event avatar — {{ $event->name }}
             </h2>
             <a href="{{ route('events.show', $event) }}"
                class="text-sm text-gray-600 hover:text-gray-800 underline">Back to event</a>
@@ -24,9 +24,9 @@
             <div class="lg:col-span-1">
                 <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5 space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Upload your photo</label>
-                        <input type="file" id="userImageInput" accept="image/*" class="mt-1 w-full rounded-lg border-gray-300">
-                        <p class="text-xs text-gray-500 mt-1">Move/zoom in the circle, then “Use photo”.</p>
+                        <label class="block text-sm font-medium text-gray-700">1. Choose your photo</label>
+                        <input type="file" id="userImageInput" disabled accept="image/*" class="mt-1 w-full rounded-lg border-gray-300">
+                        <p class="text-xs text-gray-500 mt-1">Drag or pinch to frame your photo. Then tap “Use photo”.</p>
                     </div>
 
                     <div class="pt-2 border-t">
@@ -35,7 +35,11 @@
                                 disabled>
                             Download PNG
                         </button>
-                        <p class="text-xs text-gray-500 mt-2">Image is created in your browser.</p>
+                        <button type="button" id="btnShare" class="avatar-secondary" disabled>Save / share image</button>
+                        <button type="button" id="btnEdit" class="avatar-secondary" disabled>Adjust photo crop</button>
+                        <button type="button" id="btnReset" class="avatar-secondary" disabled>Centre photo on flyer</button>
+                        <div id="exportPreview" hidden><img id="exportImage" alt="Your finished event avatar"><a id="openImage" target="_blank" rel="noopener">Open full image</a><p>On iPhone, use Save / share image. You can also touch and hold the finished image to see saving options.</p></div>
+                        <p id="avatarStatus" role="status" aria-live="polite" class="text-sm text-gray-600 mt-3">Choose a photo to get started. Your photo stays in your browser.</p>
                     </div>
                 </div>
             </div>
@@ -44,7 +48,7 @@
             <div class="lg:col-span-2">
                 <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
                     <div class="mb-3 text-sm text-gray-600">
-                        Background is the event’s avatar. Your photo will start centered — drag to reposition or use the handles to resize.
+                        2. Make it yours — drag your photo into the frame and resize using the corners. Then download or share your finished avatar.
                     </div>
                     <div id="canvas-wrap" class="w-full overflow-hidden rounded-xl border border-dashed border-gray-300 bg-gray-50 p-3">
                         <canvas id="avatar-canvas"></canvas>
@@ -55,29 +59,21 @@
     </div>
 
     {{-- Cropper Modal --}}
-    <div id="cropperModal" class="fixed inset-0 bg-black/60 hidden items-center justify-center z-[1000]">
-        <div class="bg-white rounded-2xl shadow-xl mx-4 overflow-hidden" style="width:min(92vw, 900px)">
+    <div id="cropperModal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+        <div class="avatar-dialog">
             <div class="p-3 border-b flex items-center justify-between">
-                <h3 class="font-semibold text-gray-800 text-sm">Position your photo inside the circle</h3>
+                <h3 id="cropTitle" class="font-semibold text-gray-800 text-sm">Frame your photo</h3>
                 <button id="cropCancel" class="text-gray-500 hover:text-gray-700 text-sm">Cancel</button>
             </div>
 
             <div class="modal-body" id="cropArea">
                 <img id="cropperImage" alt="Crop">
-                <div class="overlay-circle absolute inset-0">
-                    <svg width="100%" height="100%">
-                        <defs>
-                            <mask id="circle-cutout">
-                                <rect x="0" y="0" width="100%" height="100%" fill="white"/>
-                                <circle cx="50%" cy="50%" r="35%" fill="black"/>
-                            </mask>
-                        </defs>
-                        <rect x="0" y="0" width="100%" height="100%" fill="rgba(0,0,0,0.55)" mask="url(#circle-cutout)"/>
-                    </svg>
-                </div>
+
             </div>
 
-            <div class="p-3 border-t flex items-center justify-end gap-2">
+            <div class="avatar-crop-footer">
+                <p>Drag to move · pinch to zoom</p>
+                <div class="avatar-zoom"><button type="button" id="zoomOut" aria-label="Zoom out">−</button><button type="button" id="cropReset">Reset</button><button type="button" id="zoomIn" aria-label="Zoom in">+</button></div>
                 <button id="cropUse"
                         class="inline-flex items-center px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm hover:bg-indigo-700">
                     Use photo
@@ -87,25 +83,31 @@
     </div>
 
     <style>
-        /* Cropper modal sizing */
-        #cropperModal .modal-body {
-            height: clamp(460px, 80vh, 900px);
-            position: relative;
-            background: #000;
-        }
-        #cropperModal .modal-body .cropper-container { width: 100% !important; height: 100% !important; }
-        #cropperModal .modal-body img#cropperImage { max-width: 100%; max-height: 100%; display: block; }
-
-        /* Show only our circle */
-        #cropperModal .overlay-circle { pointer-events: none; }
-        #cropperModal .cropper-modal { background: transparent !important; opacity: 0 !important; }
-        #cropperModal .cropper-view-box { outline: none !important; box-shadow: none !important; }
-        #cropperModal .cropper-dashed, #cropperModal .cropper-line { border: none !important; background: transparent !important; }
-        #cropperModal .cropper-point { background: transparent !important; display: none !important; }
-        #cropperModal .cropper-face  { background: transparent !important; display: block !important; }
-
-        /* Canvas: let Fabric set width/height; no !important overrides */
-        #avatar-canvas { display: block; }
+        #cropperModal { position:fixed; left:0; top:0; width:100%; height:100vh; height:100dvh; z-index:2147483000; background:rgba(15,23,42,.8); align-items:center; justify-content:center; padding:12px; box-sizing:border-box; }
+        #cropperModal.hidden { display:none; }
+        .avatar-dialog { width:min(100%,680px); height:min(760px,100%); display:flex; flex-direction:column; background:white; border-radius:24px; overflow:hidden; box-shadow:0 24px 80px #0005; }
+        .avatar-dialog > :first-child { flex:none; padding:16px; }
+        #cropArea { flex:1; min-height:0; position:relative; background:#111827; overflow:hidden; }
+        #cropperImage { display:block; max-width:100%; max-height:100%; }
+        #cropArea .cropper-container { width:100%!important; height:100%!important; }
+        #cropArea .cropper-view-box, #cropArea .cropper-face { border-radius:50%; }
+        #cropArea .cropper-view-box { outline:0; box-shadow:0 0 0 2px white; }
+        #cropArea .cropper-dashed, #cropArea .cropper-line, #cropArea .cropper-point { display:none; }
+        .avatar-crop-footer { flex:none; background:white; padding:12px 16px max(16px,env(safe-area-inset-bottom)); display:grid; gap:10px; text-align:center; }
+        .avatar-crop-footer p { font-size:13px; color:#64748b; margin:0; }
+        .avatar-zoom { display:flex; gap:8px; justify-content:center; }
+        .avatar-zoom button { min-width:48px; min-height:44px; border:1px solid #e2e8f0; border-radius:12px; padding:8px 16px; font-weight:600; }
+        #cropUse { display:block; width:100%; min-height:48px; justify-content:center; background:#e84b4b; border-radius:12px; font-size:16px; font-weight:700; }
+        .avatar-secondary { display:block; width:100%; padding:12px; margin-top:10px; min-height:44px; border:1px solid #e2e8f0; border-radius:12px; color:#334155; font-weight:600; background:white; }
+        .avatar-secondary:disabled { opacity:.45; }
+        #btnDownload { background:#e84b4b; min-height:48px; }
+        #exportPreview { margin-top:14px; padding:12px; border-radius:14px; background:#f8fafc; }
+        #exportPreview img { width:100%; border-radius:8px; }
+        #exportPreview a { display:block; text-align:center; padding:12px; text-decoration:underline; }
+        #exportPreview p { font-size:13px; color:#64748b; }
+        #avatar-canvas { display:block; }
+        body.avatar-cropping > :not(#cropperModal) { visibility:hidden!important; }
+        @media(max-width:640px) { #cropperModal { padding:8px; } .avatar-dialog { border-radius:18px; } }
     </style>
 
     {{-- Libs BEFORE our custom script --}}
@@ -136,7 +138,8 @@
             const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
             const padY = parseFloat(cs.paddingTop)  + parseFloat(cs.paddingBottom);
 
-            const innerW = Math.max(260, Math.floor(rect.width - padX));
+            const innerW = Math.max(1, Math.floor(rect.width - padX - 2));
+            const previousW = canvas.getWidth();
 
             // keep original image aspect
             const ratio = bgImg.height / bgImg.width;
@@ -157,12 +160,14 @@
                 { originX: 'left', originY: 'top', scaleX: scale, scaleY: scale }
             );
 
-            // keep user image centered
+            // Preserve photo placement and size across viewport changes
             if (userImgObj) {
-                userImgObj.set({ left: canvas.getWidth() / 2, top: canvas.getHeight() / 2 });
+                const factor = cw / previousW;
+                userImgObj.set({ left: userImgObj.left * factor, top: userImgObj.top * factor, scaleX: userImgObj.scaleX * factor, scaleY: userImgObj.scaleY * factor });
                 userImgObj.setCoords();
             }
             canvas.requestRenderAll();
+            if (userImgObj) queueExport();
         }
 
         let raf;
@@ -170,11 +175,6 @@
             cancelAnimationFrame(raf);
             raf = requestAnimationFrame(resizeCanvas);
         });
-
-        fabric.Image.fromURL(bgUrl, (img) => {
-            bgImg = img;
-            resizeCanvas();
-        }, { crossOrigin: 'anonymous' });
 
         // Elements
         const input = document.getElementById('userImageInput');
@@ -184,30 +184,51 @@
         const cropUse = document.getElementById('cropUse');
         const cropCancel = document.getElementById('cropCancel');
 
-        let cropper = null;
+        const status = document.getElementById('avatarStatus');
+        const btnShare = document.getElementById('btnShare');
+        const btnEdit = document.getElementById('btnEdit');
+        const btnReset = document.getElementById('btnReset');
+        const preview = document.getElementById('exportPreview');
+        let cropper = null, photoUrl = null, previousFocus = null, oldOverflow = '', exportUrl = null, exportFile = null, exportRevision = 0, exportTimer;
+        const fileName = @json((\Illuminate\Support\Str::slug($event->name) ?: 'event') . '_display_picture.png');
+
+        fabric.Image.fromURL(bgUrl, (img) => {
+            if (!img || !img.width) { status.textContent = "The event artwork could not load. Please reload the page."; return; }
+            input.disabled = false;
+            bgImg = img;
+            resizeCanvas();
+        }, { crossOrigin: 'anonymous' });
 
         function openModal() {
             if (modal.parentElement !== document.body) document.body.appendChild(modal);
-            modal.classList.remove('hidden'); modal.classList.add('flex');
+            previousFocus = document.activeElement;
+            oldOverflow = document.body.style.overflow;
+            modal.classList.remove('hidden'); modal.style.display = 'flex';
+            document.body.classList.add('avatar-cropping');
+            syncViewport();
+            cropCancel.focus();
             document.body.style.overflow = 'hidden';
         }
         function closeModal() {
-            modal.classList.add('hidden'); modal.classList.remove('flex');
-            document.body.style.overflow = '';
+            modal.classList.add('hidden'); modal.style.display = '';
+            document.body.classList.remove('avatar-cropping');
+            document.body.style.overflow = oldOverflow;
+            if (previousFocus) previousFocus.focus();
         }
 
-        function fitCropperToContainer(startOut = true) {
+        function fitCropperToContainer() {
             if (!cropper) return;
             const c = cropper.getContainerData();
             const i = cropper.getImageData();
             if (!c.width || !c.height || !i.naturalWidth || !i.naturalHeight) return;
 
-            const fitScale = Math.min(c.width / i.naturalWidth, c.height / i.naturalHeight);
+            const size = Math.min(c.width, c.height) * 0.82;
+            const fitScale = Math.max(size / i.naturalWidth, size / i.naturalHeight);
             cropper.reset();
-            const startScale = startOut ? fitScale * 0.85 : fitScale;
+            const startScale = fitScale;
             cropper.zoomTo(startScale, { x: c.width / 2, y: c.height / 2 });
 
-            const size = Math.min(c.width, c.height) * 0.7;
+
             cropper.setCropBoxData({
                 width: size, height: size,
                 left: (c.width - size) / 2,
@@ -215,17 +236,18 @@
             });
         }
 
-        input.addEventListener('change', (e) => {
-            const file = e.target.files && e.target.files[0];
-            if (!file) return;
+        function loadPhoto(file) {
+            if (!file || !bgImg) return;
+            if (cropper) { cropper.destroy(); cropper = null; }
+            if (photoUrl) URL.revokeObjectURL(photoUrl);
 
-            const url = URL.createObjectURL(file);
+            const url = photoUrl = URL.createObjectURL(file);
             cropImg.onload = () => {
                 openModal();
                 requestAnimationFrame(() => {
                     if (cropper) cropper.destroy();
                     cropper = new Cropper(cropImg, {
-                        viewMode: 0,
+                        viewMode: 1,
                         center: false,
                         dragMode: 'move',
                         movable: true,
@@ -242,21 +264,35 @@
                         autoCropArea: 0.7,
                         cropBoxMovable: false,
                         cropBoxResizable: false,
-                        zoom(event) {
-                            const c = cropper.getContainerData();
-                            const i = cropper.getImageData();
-                            const fit = Math.min(c.width / i.naturalWidth, c.height / i.naturalHeight);
-                            const minRatio = fit * 0.6;
-                            if (event.detail.ratio < minRatio) {
-                                event.preventDefault();
-                                cropper.zoomTo(minRatio);
-                            }
-                        },
-                        ready() { fitCropperToContainer(true); }
+                        ready() { fitCropperToContainer(true); cropUse.disabled = false; }
                     });
                 });
             };
+            cropUse.disabled = true;
+            cropImg.onerror = () => { status.textContent = 'This photo could not be opened. Try a JPEG or PNG image.'; closeModal(); };
             cropImg.src = url;
+        }
+        input.addEventListener('change', e => loadPhoto(e.target.files && e.target.files[0]));
+        btnEdit.addEventListener('click', () => { const file = input.files && input.files[0]; if (file) loadPhoto(file); });
+        document.getElementById('zoomIn').addEventListener('click', () => cropper && cropper.zoom(.1));
+        document.getElementById('zoomOut').addEventListener('click', () => cropper && cropper.zoom(-.1));
+        document.getElementById('cropReset').addEventListener('click', () => fitCropperToContainer());
+        function syncViewport() {
+            const v = window.visualViewport;
+            modal.style.height = `${v ? v.height : window.innerHeight}px`;
+            modal.style.top = `${v ? v.offsetTop : 0}px`;
+        }
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', syncViewport);
+            window.visualViewport.addEventListener('scroll', syncViewport);
+        }
+        modal.addEventListener('keydown', e => {
+            if (e.key === 'Escape') { cropCancel.click(); return; }
+            if (e.key !== 'Tab') return;
+            const buttons = [...modal.querySelectorAll('button:not(:disabled)')];
+            const first = buttons[0], last = buttons[buttons.length-1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
         });
 
         window.addEventListener('resize', () => {
@@ -268,12 +304,13 @@
             try { cropper && cropper.destroy(); } catch {}
             cropper = null;
             closeModal();
-            input.value = '';
+
         });
 
         cropUse.addEventListener('click', () => {
-            if (!cropper) return;
-
+            if (!cropper || !bgImg) return;
+            try {
+            cropUse.disabled = true;
             const SIZE = 1400;
             const square = cropper.getCroppedCanvas({
                 width: SIZE, height: SIZE,
@@ -317,35 +354,74 @@
                 userImgObj.bringToFront();
                 canvas.renderAll();
 
-                btnDownload.disabled = false;
+                btnEdit.disabled = false; btnReset.disabled = false;
+                queueExport();
             });
 
             try { cropper.destroy(); } catch {}
             cropper = null;
             closeModal();
+            } catch (error) { cropUse.disabled = false; status.textContent = 'Could not prepare your photo. Please try another image.'; closeModal(); console.error(error); }
         });
 
+        function queueExport() {
+            const revision = ++exportRevision;
+            exportFile = null; btnDownload.disabled = true; btnShare.disabled = true;
+            preview.hidden = true;
+            status.textContent = 'Preparing your PNG…';
+            clearTimeout(exportTimer);
+            exportTimer = setTimeout(() => {
+                try {
+                    canvas.discardActiveObject(); canvas.renderAll();
+                    // Fixed maximum export dimension avoids huge canvases on desktop or phones.
+                    const multiplier = 1600 / Math.max(canvas.getWidth(), canvas.getHeight());
+                    const output = canvas.toCanvasElement(multiplier);
+                    output.toBlob(blob => {
+                        output.width = output.height = 0;
+                        if (revision !== exportRevision) return;
+                        if (!blob) { status.textContent = 'Could not export the image. Please try again.'; return; }
+                        if (exportUrl) URL.revokeObjectURL(exportUrl);
+                        exportUrl = URL.createObjectURL(blob);
+                        exportFile = new File([blob], fileName, {type:'image/png'});
+                        document.getElementById('exportImage').src = exportUrl;
+                        document.getElementById('openImage').href = exportUrl;
+                        btnDownload.disabled = false; btnShare.disabled = false;
+                        status.textContent = 'Ready! Download your PNG or tap Save / share image.';
+                    }, 'image/png');
+                } catch (error) { status.textContent = 'Could not export the image. Reload the page and try again.'; console.error(error); }
+            }, 180);
+        }
+        canvas.on('object:modified', queueExport);
+        btnReset.addEventListener('click', () => {
+            if (!userImgObj) return;
+            userImgObj.set({left:canvas.getWidth()/2,top:canvas.getHeight()/2});
+            userImgObj.setCoords(); canvas.requestRenderAll(); queueExport();
+        });
         btnDownload.addEventListener('click', () => {
-            canvas.discardActiveObject();
-            canvas.renderAll();
-
-            // ensure at least ~1600px wide export (looks great on phones & socials)
-            const MIN_EXPORT = 1600;
-            const mult = Math.max(2, Math.ceil(MIN_EXPORT / canvas.getWidth()));
-
-            const dataURL = canvas.toDataURL({
-                format: 'png',
-                multiplier: mult,          // <— hi-res export
-            });
-
-            const fileNameBase = @json(\Illuminate\Support\Str::slug($event->name) ?: 'event');
+            if (!exportUrl || !exportFile) return;
+            preview.hidden = false;
             const a = document.createElement('a');
-            a.href = dataURL;
-            a.download = `${fileNameBase}_display_picture.png`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            });
+            a.href = exportUrl; a.download = fileName;
+            document.body.appendChild(a); a.click();
+            setTimeout(() => a.remove(), 1000);
+            status.textContent = 'If the download does not appear, use Save / share image or the finished image below.';
+        });
+        btnShare.addEventListener('click', async () => {
+            if (!exportFile) return;
+            preview.hidden = false;
+            try {
+                if (navigator.share && navigator.canShare && navigator.canShare({files:[exportFile]})) {
+                    // File is prepared before this tap, preserving the user gesture for iOS.
+                    await navigator.share({files:[exportFile]});
+                    status.textContent = 'Your image is ready. You can save or share it again.';
+                } else {
+                    status.textContent = 'Touch and hold the finished image below to save it, or open the full image.';
+                    preview.scrollIntoView({behavior:'smooth',block:'center'});
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') status.textContent = 'Sharing was unavailable. Touch and hold the finished image below, or open the full image.';
+            }
+        });
     })();
     </script>
 </x-app-layout>
